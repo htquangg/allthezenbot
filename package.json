@@ -1,0 +1,21 @@
+{
+  "name": "allthezenbot",
+  "version": "0.0.0",
+  "description": "All the zen BOT",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node index.js"
+  },
+  "keywords": [
+    "allthezen",
+    "bot"
+  ],
+  "author": "htquangg",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "license": "Dont be a shitty human being and make your own solution.",
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  }
+}
