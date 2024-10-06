@@ -92,7 +92,12 @@ function routeV1(fastify, _, done) {
           zps: formarCurrency(getZPSYellow()),
         },
       },
-      eggs: getEggsPrice(),
+      eggs: getEggsPrice()?.map((egg) => {
+        return {
+          ...egg,
+          current_price: formarCurrency(egg.current_price),
+        };
+      }),
     });
   });
 
@@ -150,7 +155,9 @@ let stop = false;
       const eggs = getEggsPrice();
       eggs.map((egg) => {
         console.log(
-          `id ${egg.internal_id} -- egg ${egg.cat_category} -- price ${formarCurrency(egg.current_price)}`,
+          `id ${egg.internal_id} -- egg ${
+            egg.cat_category
+          } -- price ${formarCurrency(egg.current_price)}`,
         );
       });
 
@@ -162,6 +169,7 @@ let stop = false;
     } catch (error) {
       console.error("unknown error: ", error);
     } finally {
+      await wrapBuyBigEgg();
       await sleep(10 * 1e3);
     }
   }
@@ -217,39 +225,48 @@ async function wrapBuyEgg(catCategory) {
   }
 }
 
+async function wrapBuyBigEgg() {
+  if (canBuyBigEgg()) {
+    await buyBigEgg();
+    await sleep(randomIntFromInterval(30 * 1e3, 45 * 1e3));
+    await claimTao();
+    await fetchInfo();
+  }
+}
+
 async function wrapBuyPageEgg() {
   if (canBuyPageEgg()) {
     await buyPageEgg();
-    await fetchInfo();
     await sleep(randomIntFromInterval(10 * 1e3, 15 * 1e3));
     await claimTao();
+    await fetchInfo();
   }
 }
 
 async function wrapBuyPagesGangEgg() {
   if (canBuyPagesGangEgg()) {
     await buyPagesGangEgg();
-    await fetchInfo();
     await sleep(randomIntFromInterval(15 * 1e3, 25 * 1e3));
     await claimTao();
+    await fetchInfo();
   }
 }
 
 async function wrapBuyFootballerEgg() {
   if (canBuyFootballerEgg()) {
     await buyFootballerEgg();
-    await fetchInfo();
     await sleep(randomIntFromInterval(20 * 1e3, 30 * 1e3));
     await claimTao();
+    await fetchInfo();
   }
 }
 
 async function wrapBuyCrossbreedEgg() {
   if (canBuyCrossbreedEgg()) {
     await buyCrossbreedEgg();
-    await fetchInfo();
     await sleep(randomIntFromInterval(30 * 1e3, 45 * 1e3));
     await claimTao();
+    await fetchInfo();
   }
 }
 
@@ -259,6 +276,7 @@ async function wrapBuyBandEgg() {
     await fetchInfo();
     await sleep(randomIntFromInterval(50 * 1e3, 75 * 1e3));
     await claimTao();
+    await fetchInfo();
   }
 }
 
@@ -329,6 +347,28 @@ function canBuyEgg(catCategory) {
   const zenPurple = calculateZenPurple();
   const priceEgg = getEggPrice(catCategory);
   return zenPurple >= priceEgg;
+}
+
+function canBuyBigEgg() {
+  if (!gameInfo) {
+    return false;
+  }
+
+  const now = new Date();
+  const nextPetTimestamp = new Date(
+    gameInfo?.zen_den?.regenesis_egg_status?.next_pet_timestamp,
+  );
+  const diffSec = (now.getTime() - nextPetTimestamp.getTime()) / 1e3;
+
+  const can = diffSec >= 0;
+
+  if (!can) {
+    console.debug(
+      `[BIGEGG] next time to claim big egg: ${nextPetTimestamp.toLocaleString()}`,
+    );
+  }
+
+  return can;
 }
 
 function buyPageEgg() {
@@ -575,6 +615,31 @@ function buyFancyEgg(catCategory) {
       })
       .catch((error) => {
         console.error("failed to buy fancy egg", error);
+        reject(error);
+      });
+  });
+}
+
+function buyBigEgg() {
+  return new Promise((resolve, reject) => {
+    fetch(getUrl("/egg/api/den/gently-stroke-the-regenesis-egg"), {
+      headers: HEADERS,
+      body: null,
+      method: "POST",
+    })
+      .then(async (res) => {
+        const payload = await res.json();
+        if (payload?.regenesis_egg_status) {
+          console.log(
+            `[success] buy big egg -- next-pet-timestamp ${new Date(
+              payload.regenesis_egg_status?.next_pet_timestamp,
+            ).toLocaleString()}`,
+          );
+        }
+        resolve(payload);
+      })
+      .catch((error) => {
+        console.error("failed to buy big egg", error);
         reject(error);
       });
   });
