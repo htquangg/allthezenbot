@@ -48,6 +48,7 @@ const CAT_CATEGORY = {
   PAGES_GANG: "pages_gang",
   FOOTBALLER: "footballer",
   CROSSBREED: "crossbreed",
+  BAND: "band",
 };
 
 let TARGET_CAT_CATEGORY = CAT_CATEGORY.CROSSBREED;
@@ -66,13 +67,21 @@ function catCategoryNumberToString(catCategory) {
       targetCatCategory = CAT_CATEGORY.FOOTBALLER;
       break;
     case 4:
-    default:
       targetCatCategory = CAT_CATEGORY.CROSSBREED;
+      break;
+    case 5:
+      targetCatCategory = CAT_CATEGORY.BAND;
+      break;
+    default:
+      targetCatCategory = CAT_CATEGORY.BAND;
       break;
   }
 
   return targetCatCategory;
 }
+
+let gameInfo = {};
+let lastGameInfo = null;
 
 const Fastify = require("fastify");
 const fastify = Fastify({
@@ -86,21 +95,33 @@ fastify.setNotFoundHandler((request, reply) => {
 
 function routeV1(fastify, opts, done) {
   fastify.get("/debug/healthz", function handler(_, reply) {
-    return responseSuccess(reply);
+    if (Object.keys(gameInfo).length) {
+      return responseSuccess(reply);
+    }
+    return responseFailure(reply);
   });
-  fastify.get("/zen/purple", function handler(_, _) {
+  fastify.get("/zen/purple", function handler(_, reply) {
+    if (!Object.keys(gameInfo).length) {
+      return responseFailure(reply);
+    }
     return responseSuccess(reply, {
-      total: calculateZenPurple(),
-      zps: getZPSPurle(),
+      total: formarCurrency(calculateZenPurple()),
+      zps: formarCurrency(getZPSPurle()),
     });
   });
-  fastify.get("/zen/yellow", function handler(_, _) {
+  fastify.get("/zen/yellow", function handler(_, reply) {
+    if (!Object.keys(gameInfo).length) {
+      return responseFailure(reply);
+    }
     return responseSuccess(reply, {
-      total: calculateZenYellow(),
-      zps: getZPSYellow(),
+      total: formarCurrency(calculateZenYellow()),
+      zps: formarCurrency(getZPSYellow()),
     });
   });
-  fastify.get("/eggs/buy/:catCategory", async function handler(_, reply) {
+  fastify.get("/eggs/buy/:catCategory", async function handler(request, reply) {
+    if (!Object.keys(gameInfo).length) {
+      return responseFailure(reply);
+    }
     const { catCategory } = request.params;
     TARGET_CAT_CATEGORY = catCategoryNumberToString(catCategory);
     return responseSuccess(reply, {
@@ -119,11 +140,10 @@ try {
   process.exit(1);
 }
 
-let gameInfo = {};
-let lastGameInfo = null;
-
 (async function main() {
-  await claimTao();
+  try {
+    await claimTao();
+  } catch (error) {}
 
   while (!stop) {
     try {
@@ -139,21 +159,7 @@ let lastGameInfo = null;
         continue;
       }
 
-      switch (TARGET_CAT_CATEGORY) {
-        case CAT_CATEGORY.PAGE:
-          await wrapBuyPageEgg();
-          break;
-        case CAT_CATEGORY.PAGES_GANG:
-          await wrapBuyPagesGangEgg();
-          break;
-        case CAT_CATEGORY.FOOTBALLER:
-          await wrapBuyFootballerEgg();
-          break;
-        case CAT_CATEGORY.CROSSBREED:
-        default:
-          await wrapBuyCrossbreedEgg();
-          break;
-      }
+      await wrapBuyEgg(TARGET_CAT_CATEGORY);
     } catch (error) {
       console.error("unknown error: ", error);
     } finally {
@@ -167,6 +173,29 @@ async function autoFetchInfo() {
   const diffSec = (now.getTime() - (lastGameInfo?.getTime() || 0)) / 1000;
   if (diffSec >= MAX_AGE) {
     await fetchInfo();
+  }
+}
+
+async function wrapBuyEgg(catCategory) {
+  switch (catCategory) {
+    case CAT_CATEGORY.PAGE:
+      await wrapBuyPageEgg();
+      break;
+    case CAT_CATEGORY.PAGES_GANG:
+      await wrapBuyPagesGangEgg();
+      break;
+    case CAT_CATEGORY.FOOTBALLER:
+      await wrapBuyFootballerEgg();
+      break;
+    case CAT_CATEGORY.CROSSBREED:
+      await wrapBuyCrossbreedEgg();
+      break;
+    case CAT_CATEGORY.BAND:
+      await wrapBuyBandEgg();
+      break;
+    default:
+      await wrapBuyBandEgg();
+      break;
   }
 }
 
@@ -206,20 +235,13 @@ async function wrapBuyCrossbreedEgg() {
   }
 }
 
-function buyPageEgg() {
-  return buyFancyEgg(CAT_CATEGORY.PAGE);
-}
-
-function buyPagesGangEgg() {
-  return buyFancyEgg(CAT_CATEGORY.PAGES_GANG);
-}
-
-function buyFootballerEgg() {
-  return buyFancyEgg(CAT_CATEGORY.FOOTBALLER);
-}
-
-function buyCrossbreedEgg() {
-  return buyFancyEgg(CAT_CATEGORY.CROSSBREED);
+async function wrapBuyBandEgg() {
+  if (canBuyBandEgg()) {
+    await buyBandEgg();
+    await fetchInfo();
+    await sleep(30 * 1e3);
+    await claimTao();
+  }
 }
 
 function canBuyPageEgg() {
@@ -270,6 +292,18 @@ function canBuyCrossbreedEgg() {
   return can;
 }
 
+function canBuyBandEgg() {
+  const can = canBuyEgg(CAT_CATEGORY.BAND);
+  if (!can) {
+    console.debug(
+      `unable to buy 'band' egg -- pageEdgePrice: ${formarCurrency(
+        getBandEggPrice(),
+      )} -- totalPurleZen: ${formarCurrency(calculateZenPurple())}`,
+    );
+  }
+  return can;
+}
+
 function canBuyEgg(catCategory) {
   if (!gameInfo) {
     return false;
@@ -277,6 +311,26 @@ function canBuyEgg(catCategory) {
   const zenPurple = calculateZenPurple();
   const priceEgg = getEggPrice(catCategory);
   return zenPurple >= priceEgg;
+}
+
+function buyPageEgg() {
+  return buyFancyEgg(CAT_CATEGORY.PAGE);
+}
+
+function buyPagesGangEgg() {
+  return buyFancyEgg(CAT_CATEGORY.PAGES_GANG);
+}
+
+function buyFootballerEgg() {
+  return buyFancyEgg(CAT_CATEGORY.FOOTBALLER);
+}
+
+function buyCrossbreedEgg() {
+  return buyFancyEgg(CAT_CATEGORY.CROSSBREED);
+}
+
+function buyBandEgg() {
+  return buyFancyEgg(CAT_CATEGORY.BAND);
 }
 
 function getPageEggPrice() {
@@ -293,6 +347,10 @@ function getFootballerEggPrice() {
 
 function getCrossbreedEggPrice() {
   return getEggPrice(CAT_CATEGORY.CROSSBREED);
+}
+
+function getBandEggPrice() {
+  return getEggPrice(CAT_CATEGORY.BAND);
 }
 
 function getEggPrice(catCategory) {
@@ -371,7 +429,7 @@ function getUrl(path) {
 }
 
 function fetchInfo() {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     fetch(getUrl("/egg/api/den"), {
       headers: HEADERS,
       body: null,
@@ -391,7 +449,7 @@ function fetchInfo() {
 }
 
 function buyFancyEgg(catCategory) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     fetch(getUrl("/egg/api/den/buy-fancy-egg"), {
       headers: HEADERS,
       body: JSON.stringify({
@@ -410,14 +468,14 @@ function buyFancyEgg(catCategory) {
         resolve(payload);
       })
       .catch((error) => {
-        console.error("failed to fetch info", error);
+        console.error("failed to buy fancy egg", error);
         reject(error);
       });
   });
 }
 
 function claimTao() {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     fetch(getUrl("/egg/api/den/claim-tao"), {
       headers: HEADERS,
       body: null,
@@ -431,14 +489,14 @@ function claimTao() {
         resolve(payload);
       })
       .catch((error) => {
-        console.error("failed to fetch info", error);
+        console.error("failed to claim tao", error);
         reject(error);
       });
   });
 }
 
 function upgradeEgg(upgradeId) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     fetch(getUrl("/egg/api/den/upgrades/buy"), {
       headers: HEADERS,
       body: JSON.stringify({
@@ -452,7 +510,7 @@ function upgradeEgg(upgradeId) {
         resolve();
       })
       .catch((error) => {
-        console.error("failed to fetch info", error);
+        console.error("failed to upgrad egg", error);
         reject(error);
       });
   });
