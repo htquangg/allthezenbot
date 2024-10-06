@@ -1,6 +1,8 @@
-var util = require("util");
 require("dotenv").config();
-var logStdout = process.stdout;
+
+require("./log");
+
+const { sleep, formarCurrency, cleanupAndExit } = require("./utils");
 
 const X_ID_TOKEN = process.env.X_ID_TOKEN;
 
@@ -23,21 +25,6 @@ const HEADERS = {
 const MAX_NUMBER = Number.MAX_SAFE_INTEGER;
 
 const MAX_AGE = 300; // seconds
-
-console.debug = function () {
-  const msg = "[debug]" + getDate() + util.format.apply(null, arguments);
-  logStdout.write(msg + "\n");
-};
-
-console.log = function () {
-  const msg = "[log]" + getDate() + util.format.apply(null, arguments);
-  logStdout.write(msg + "\n");
-};
-
-console.error = function () {
-  const msg = "[error]" + getDate() + util.format.apply(null, arguments);
-  logStdout.write(msg + "\n");
-};
 
 let stop = false;
 
@@ -63,10 +50,12 @@ const CAT_CATEGORY = {
   CROSSBREED: "crossbreed",
 };
 
-let catInfo = {};
-let lastCatInfo = null;
+let gameInfo = {};
+let lastGameInfo = null;
 
 (async function main() {
+  await claimTao();
+
   while (!stop) {
     try {
       await autoFetchInfo();
@@ -77,122 +66,61 @@ let lastCatInfo = null;
         )} -- total yellow zen: ${formarCurrency(calculateZenYellow())}`,
       );
 
-      if (!catInfo) {
+      if (!gameInfo) {
         continue;
       }
 
-      if (canBuyCrossbreedEgg()) {
-        await buyCrossbreedEgg();
-        await fetchInfo();
-        await sleep(10 * 1e3);
-        await claimTao();
-      }
+      await wrapBuyCrossbreedEgg();
     } catch (error) {
       console.error("unknown error: ", error);
     } finally {
-      await sleep(30 * 1e3);
+      await sleep(10 * 1e3);
     }
   }
 })();
 
-function getUrl(path) {
-  const uri = new URL(API_URL);
-  uri.pathname = path;
-  return uri.toString();
-}
-
 async function autoFetchInfo() {
   const now = new Date();
-  const diffSec = (now.getTime() - (lastCatInfo?.getTime() || 0)) / 1000;
+  const diffSec = (now.getTime() - (lastGameInfo?.getTime() || 0)) / 1000;
   if (diffSec >= MAX_AGE) {
     await fetchInfo();
   }
 }
 
-function fetchInfo() {
-  return new Promise((resolve) => {
-    fetch(getUrl("/egg/api/den"), {
-      headers: HEADERS,
-      body: null,
-      method: "GET",
-    })
-      .then(async (res) => {
-        const payload = await res.json();
-        catInfo = payload;
-        lastCatInfo = new Date();
-        resolve(payload);
-      })
-      .catch((error) => {
-        console.error("failed to fetch info", error);
-        reject(error);
-      });
-  });
+async function wrapBuyPageEgg() {
+  if (canBuyPageEgg()) {
+    await buyPageEgg();
+    await fetchInfo();
+    await sleep(10 * 1e3);
+    await claimTao();
+  }
 }
 
-function buyFancyEgg(cat_category) {
-  return new Promise((resolve) => {
-    fetch(getUrl("/egg/api/den/buy-fancy-egg"), {
-      headers: HEADERS,
-      body: JSON.stringify({
-        cat_category,
-        quantity: 1,
-      }),
-      method: "POST",
-    })
-      .then(async (res) => {
-        const payload = await res.json();
-        console.log(
-          "[success] buy fancy egg: ",
-          cat_category,
-          formarCurrency(payload?.zen_den?.zen_status?.zen_count),
-        );
-        resolve(payload);
-      })
-      .catch((error) => {
-        console.error("failed to fetch info", error);
-        reject(error);
-      });
-  });
+async function wrapBuyPagesGangEgg() {
+  if (canBuyPagesGangEgg()) {
+    await buyPagesGangEgg();
+    await fetchInfo();
+    await sleep(15 * 1e3);
+    await claimTao();
+  }
 }
 
-function claimTao() {
-  return new Promise((resolve) => {
-    fetch(getUrl("/egg/api/den/claim-tao"), {
-      headers: HEADERS,
-      body: null,
-      method: "POST",
-    })
-      .then(async (res) => {
-        const payload = await res.json();
-        console.log("[success] claim tao", payload?.claim?.id);
-        resolve(payload);
-      })
-      .catch((error) => {
-        console.error("failed to fetch info", error);
-        reject(error);
-      });
-  });
+async function wrapBuyFootballerEgg() {
+  if (canBuyFootballerEgg()) {
+    await buyFootballerEgg();
+    await fetchInfo();
+    await sleep(20 * 1e3);
+    await claimTao();
+  }
 }
 
-function upgradeEgg(upgrade_id) {
-  return new Promise((resolve) => {
-    fetch(getUrl("/egg/api/den/upgrades/buy"), {
-      headers: HEADERS,
-      body: JSON.stringify({
-        upgrade_id,
-      }),
-      method: "POST",
-    })
-      .then(async (res) => {
-        await res.json();
-        console.log("[success] upgraded egg");
-        resolve();
-      })
-      .catch((error) => {
-        console.error("failed to fetch info", error);
-        reject(error);
-      });
-  });
+async function wrapBuyCrossbreedEgg() {
+  if (canBuyCrossbreedEgg()) {
+    await buyCrossbreedEgg();
+    await fetchInfo();
+    await sleep(30 * 1e3);
+    await claimTao();
+  }
 }
 
 function buyPageEgg() {
@@ -260,7 +188,7 @@ function canBuyCrossbreedEgg() {
 }
 
 function canBuyEgg(cat_category) {
-  if (!catInfo) {
+  if (!gameInfo) {
     return false;
   }
   const zenPurple = calculateZenPurple();
@@ -285,11 +213,11 @@ function getCrossbreedEggPrice() {
 }
 
 function getEggPrice(cat_category) {
-  if (!catInfo) {
+  if (!gameInfo) {
     return MAX_NUMBER;
   }
 
-  const eggShop = catInfo?.zen_den?.egg_shop;
+  const eggShop = gameInfo?.zen_den?.egg_shop;
   if (!eggShop) {
     return MAX_NUMBER;
   }
@@ -303,88 +231,127 @@ function getEggPrice(cat_category) {
 }
 
 function calculateZenPurple() {
-  if (!catInfo) {
+  if (!gameInfo) {
     return 0;
   }
-  if (!lastCatInfo) {
+  if (!lastGameInfo) {
     return 0;
   }
 
   const now = new Date();
-  const diffSec = (now.getTime() - lastCatInfo?.getTime()) / 1e3;
+  const diffSec = (now.getTime() - lastGameInfo?.getTime()) / 1e3;
   return (
-    catInfo.zen_den?.zen_status?.zen_count +
-    catInfo.zen_den?.zen_status?.zps * diffSec
+    gameInfo.zen_den?.zen_status?.zen_count +
+    gameInfo.zen_den?.zen_status?.zps * diffSec
   );
 }
 
 function calculateZenYellow() {
-  if (!catInfo) {
+  if (!gameInfo) {
     return 0;
   }
-  if (!lastCatInfo) {
+  if (!lastGameInfo) {
     return 0;
   }
 
   const now = new Date();
-  const diffSec = (now.getTime() - lastCatInfo?.getTime()) / 1e3;
+  const diffSec = (now.getTime() - lastGameInfo?.getTime()) / 1e3;
   return (
-    catInfo.zen_den?.regenesis_egg_status?.zen_accumulated +
-    catInfo.zen_den?.regenesis_egg_status?.zps * diffSec
+    gameInfo.zen_den?.regenesis_egg_status?.zen_accumulated +
+    gameInfo.zen_den?.regenesis_egg_status?.zps * diffSec
   );
 }
 
-function sleep(ms) {
-  let timeout = null;
+function getUrl(path) {
+  const uri = new URL(API_URL);
+  uri.pathname = path;
+  return uri.toString();
+}
+
+function fetchInfo() {
   return new Promise((resolve) => {
-    timeout = setTimeout(
-      () => {
-        clearTimeout(timeout);
-        resolve();
-      },
-      ms + randomIntFromInterval(100, 3 * 1e3),
-    );
+    fetch(getUrl("/egg/api/den"), {
+      headers: HEADERS,
+      body: null,
+      method: "GET",
+    })
+      .then(async (res) => {
+        const payload = await res.json();
+        gameInfo = payload;
+        lastGameInfo = new Date();
+        resolve(payload);
+      })
+      .catch((error) => {
+        console.error("failed to fetch info", error);
+        reject(error);
+      });
   });
 }
 
-function formarCurrency(labelValue) {
-  // Nine Zeroes for Billions
-  return Math.abs(Number(labelValue)) >= 1.0e9
-    ? (Math.abs(Number(labelValue)) / 1.0e9).toFixed(2) + "B"
-    : // Six Zeroes for Millions
-      Math.abs(Number(labelValue)) >= 1.0e6
-      ? (Math.abs(Number(labelValue)) / 1.0e6).toFixed(2) + "M"
-      : // Three Zeroes for Thousands
-        Math.abs(Number(labelValue)) >= 1.0e3
-        ? (Math.abs(Number(labelValue)) / 1.0e3).toFixed(2) + "K"
-        : Math.abs(Number(labelValue));
+function buyFancyEgg(cat_category) {
+  return new Promise((resolve) => {
+    fetch(getUrl("/egg/api/den/buy-fancy-egg"), {
+      headers: HEADERS,
+      body: JSON.stringify({
+        cat_category,
+        quantity: 1,
+      }),
+      method: "POST",
+    })
+      .then(async (res) => {
+        const payload = await res.json();
+        console.log(
+          "[success] buy fancy egg: ",
+          cat_category,
+          formarCurrency(payload?.zen_den?.zen_status?.zen_count),
+        );
+        resolve(payload);
+      })
+      .catch((error) => {
+        console.error("failed to fetch info", error);
+        reject(error);
+      });
+  });
 }
 
-function randomIntFromInterval(min, max) {
-  // min and max included
-  return Math.floor(Math.random() * (max - min + 1) + min);
+function claimTao() {
+  return new Promise((resolve) => {
+    fetch(getUrl("/egg/api/den/claim-tao"), {
+      headers: HEADERS,
+      body: null,
+      method: "POST",
+    })
+      .then(async (res) => {
+        const payload = await res.json();
+        if (payload?.claim?.id) {
+          console.log("[success] claim tao", payload?.claim?.id);
+        }
+        resolve(payload);
+      })
+      .catch((error) => {
+        console.error("failed to fetch info", error);
+        reject(error);
+      });
+  });
 }
 
-function getDate() {
-  const today = new Date();
-  return (
-    "[" +
-    today.getFullYear() +
-    "-" +
-    (today.getMonth() + 1) +
-    "-" +
-    today.getDate() +
-    " " +
-    today.getHours() +
-    ":" +
-    today.getMinutes() +
-    ":" +
-    today.getSeconds() +
-    "]"
-  );
-}
-
-function cleanupAndExit() {
-  console.log(`cleanupAndExit done`);
-  process.exit(0);
+function upgradeEgg(upgrade_id) {
+  return new Promise((resolve) => {
+    fetch(getUrl("/egg/api/den/upgrades/buy"), {
+      headers: HEADERS,
+      body: JSON.stringify({
+        upgrade_id,
+      }),
+      method: "POST",
+    })
+      .then(async (res) => {
+        await res.json();
+        console.log("[success] upgraded egg");
+        resolve();
+      })
+      .catch((error) => {
+        console.error("failed to fetch info", error);
+        reject(error);
+      });
+  });
 }
