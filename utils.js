@@ -48,9 +48,9 @@ function getDate() {
   );
 }
 
-function cleanupAndExit() {
+function cleanupAndExit(code = 0) {
   console.log(`cleanupAndExit done`);
-  process.exit(0);
+  process.exit(code);
 }
 
 module.exports = {
