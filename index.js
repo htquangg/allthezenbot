@@ -50,6 +50,75 @@ const CAT_CATEGORY = {
   CROSSBREED: "crossbreed",
 };
 
+let TARGET_CAT_CATEGORY = CAT_CATEGORY.CROSSBREED;
+
+function catCategoryNumberToString(catCategory) {
+  let targetCatCategory = CAT_CATEGORY.CROSSBREED;
+
+  switch (Number(catCategory)) {
+    case 1:
+      targetCatCategory = CAT_CATEGORY.PAGE;
+      break;
+    case 2:
+      targetCatCategory = CAT_CATEGORY.PAGES_GANG;
+      break;
+    case 3:
+      targetCatCategory = CAT_CATEGORY.FOOTBALLER;
+      break;
+    case 4:
+    default:
+      targetCatCategory = CAT_CATEGORY.CROSSBREED;
+      break;
+  }
+
+  return targetCatCategory;
+}
+
+const Fastify = require("fastify");
+const fastify = Fastify({
+  logger: true,
+  disableRequestLogging: true,
+});
+
+fastify.setNotFoundHandler((request, reply) => {
+  return responseFailure(reply);
+});
+
+function routeV1(fastify, opts, done) {
+  fastify.get("/debug/healthz", function handler(_, reply) {
+    return responseSuccess(reply);
+  });
+  fastify.get("/zen/purple", function handler(_, _) {
+    return responseSuccess(reply, {
+      total: calculateZenPurple(),
+      zps: getZPSPurle(),
+    });
+  });
+  fastify.get("/zen/yellow", function handler(_, _) {
+    return responseSuccess(reply, {
+      total: calculateZenYellow(),
+      zps: getZPSYellow(),
+    });
+  });
+  fastify.get("/eggs/buy/:catCategory", async function handler(_, reply) {
+    const { catCategory } = request.params;
+    TARGET_CAT_CATEGORY = catCategoryNumberToString(catCategory);
+    return responseSuccess(reply, {
+      catCategory: TARGET_CAT_CATEGORY,
+    });
+  });
+  done();
+}
+
+fastify.register(routeV1, { prefix: "/api/v1" });
+
+try {
+  fastify.listen({ port: 3000 });
+} catch (error) {
+  console.error(err);
+  process.exit(1);
+}
+
 let gameInfo = {};
 let lastGameInfo = null;
 
@@ -70,7 +139,21 @@ let lastGameInfo = null;
         continue;
       }
 
-      await wrapBuyCrossbreedEgg();
+      switch (TARGET_CAT_CATEGORY) {
+        case CAT_CATEGORY.PAGE:
+          await wrapBuyPageEgg();
+          break;
+        case CAT_CATEGORY.PAGES_GANG:
+          await wrapBuyPagesGangEgg();
+          break;
+        case CAT_CATEGORY.FOOTBALLER:
+          await wrapBuyFootballerEgg();
+          break;
+        case CAT_CATEGORY.CROSSBREED:
+        default:
+          await wrapBuyCrossbreedEgg();
+          break;
+      }
     } catch (error) {
       console.error("unknown error: ", error);
     } finally {
@@ -187,12 +270,12 @@ function canBuyCrossbreedEgg() {
   return can;
 }
 
-function canBuyEgg(cat_category) {
+function canBuyEgg(catCategory) {
   if (!gameInfo) {
     return false;
   }
   const zenPurple = calculateZenPurple();
-  const priceEgg = getEggPrice(cat_category);
+  const priceEgg = getEggPrice(catCategory);
   return zenPurple >= priceEgg;
 }
 
@@ -212,7 +295,7 @@ function getCrossbreedEggPrice() {
   return getEggPrice(CAT_CATEGORY.CROSSBREED);
 }
 
-function getEggPrice(cat_category) {
+function getEggPrice(catCategory) {
   if (!gameInfo) {
     return MAX_NUMBER;
   }
@@ -222,7 +305,7 @@ function getEggPrice(cat_category) {
     return MAX_NUMBER;
   }
 
-  const pageShop = eggShop.filter((e) => e.cat_category === cat_category);
+  const pageShop = eggShop.filter((e) => e.cat_category === catCategory);
   if (!pageShop.length) {
     return MAX_NUMBER;
   }
@@ -240,10 +323,7 @@ function calculateZenPurple() {
 
   const now = new Date();
   const diffSec = (now.getTime() - lastGameInfo?.getTime()) / 1e3;
-  return (
-    gameInfo.zen_den?.zen_status?.zen_count +
-    gameInfo.zen_den?.zen_status?.zps * diffSec
-  );
+  return gameInfo.zen_den?.zen_status?.zen_count + getZPSPurle() * diffSec;
 }
 
 function calculateZenYellow() {
@@ -258,8 +338,30 @@ function calculateZenYellow() {
   const diffSec = (now.getTime() - lastGameInfo?.getTime()) / 1e3;
   return (
     gameInfo.zen_den?.regenesis_egg_status?.zen_accumulated +
-    gameInfo.zen_den?.regenesis_egg_status?.zps * diffSec
+    getZPSYellow() * diffSec
   );
+}
+
+function getZPSPurle() {
+  if (!gameInfo) {
+    return 0;
+  }
+  if (!lastGameInfo) {
+    return 0;
+  }
+
+  return gameInfo.zen_den?.zen_status?.zps || 0;
+}
+
+function getZPSYellow() {
+  if (!gameInfo) {
+    return 0;
+  }
+  if (!lastGameInfo) {
+    return 0;
+  }
+
+  return gameInfo.zen_den?.regenesis_egg_status?.zps || 0;
 }
 
 function getUrl(path) {
@@ -288,12 +390,12 @@ function fetchInfo() {
   });
 }
 
-function buyFancyEgg(cat_category) {
+function buyFancyEgg(catCategory) {
   return new Promise((resolve) => {
     fetch(getUrl("/egg/api/den/buy-fancy-egg"), {
       headers: HEADERS,
       body: JSON.stringify({
-        cat_category,
+        cat_category: catCategory,
         quantity: 1,
       }),
       method: "POST",
@@ -302,7 +404,7 @@ function buyFancyEgg(cat_category) {
         const payload = await res.json();
         console.log(
           "[success] buy fancy egg: ",
-          cat_category,
+          catCategory,
           formarCurrency(payload?.zen_den?.zen_status?.zen_count),
         );
         resolve(payload);
@@ -335,12 +437,12 @@ function claimTao() {
   });
 }
 
-function upgradeEgg(upgrade_id) {
+function upgradeEgg(upgradeId) {
   return new Promise((resolve) => {
     fetch(getUrl("/egg/api/den/upgrades/buy"), {
       headers: HEADERS,
       body: JSON.stringify({
-        upgrade_id,
+        upgrade_id: upgradeId,
       }),
       method: "POST",
     })
@@ -354,4 +456,18 @@ function upgradeEgg(upgrade_id) {
         reject(error);
       });
   });
+}
+
+function responseSuccess(reply, data) {
+  if (data) {
+    return { code: 200, status: "OK", data };
+  }
+  return { code: 200, status: "OK" };
+}
+
+function responseFailure(reply, data) {
+  if (data) {
+    return { code: 200, status: "ERROR", data };
+  }
+  return { code: 200, status: "ERROR" };
 }
