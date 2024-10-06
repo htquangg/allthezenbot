@@ -95,10 +95,15 @@ fastify.setNotFoundHandler((request, reply) => {
 
 function routeV1(fastify, opts, done) {
   fastify.get("/debug/healthz", function handler(_, reply) {
-    if (Object.keys(gameInfo).length) {
-      return responseSuccess(reply);
+    if (!Object.keys(gameInfo).length) {
+      return responseFailure(reply);
     }
-    return responseFailure(reply);
+    const now = new Date();
+    const diffSec = (now.getTime() - (lastGameInfo?.getTime() || 0)) / 1000;
+    if (diffSec >= MAX_AGE) {
+      return responseFailure(reply);
+    }
+    return responseSuccess(reply);
   });
   fastify.get("/zen/purple", function handler(_, reply) {
     if (!Object.keys(gameInfo).length) {
