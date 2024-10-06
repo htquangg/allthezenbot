@@ -6,7 +6,7 @@ function sleep(ms) {
         clearTimeout(timeout);
         resolve();
       },
-      ms + randomIntFromInterval(100, 3 * 1e3),
+      ms + randomIntFromInterval(100, 5 * 1e3),
     );
   });
 }

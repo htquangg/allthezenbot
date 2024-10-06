@@ -133,7 +133,7 @@ let stop = false;
 
 (async function main() {
   try {
-    await claimTao();
+    await claimTaoAPI();
   } catch (error) {}
 
   while (!stop) {
@@ -165,12 +165,14 @@ let stop = false;
         continue;
       }
 
+      await wrapBuyBigEgg();
+      await wrapUpgradeEgg();
+
       await wrapBuyEgg(targetCatCategory);
     } catch (error) {
       console.error("unknown error: ", error);
     } finally {
-      await wrapBuyBigEgg();
-      await sleep(10 * 1e3);
+      await sleep(randomIntFromInterval(5 * 1e3, 15 * 1e3));
     }
   }
 })();
@@ -225,11 +227,25 @@ async function wrapBuyEgg(catCategory) {
   }
 }
 
+async function wrapUpgradeEgg() {
+  let stopUpgrade = false;
+  while (!stopUpgrade) {
+    if (!canUpgradeEgg()) {
+      stopUpgrade = true;
+      continue;
+    }
+    await upgradeEggAPI(getFirstUpgrade()?.id);
+    await sleep(randomIntFromInterval(5 * 1e3, 10 * 1e3));
+    await claimTaoAPI();
+    await fetchInfo();
+  }
+}
+
 async function wrapBuyBigEgg() {
   if (canBuyBigEgg()) {
-    await buyBigEgg();
+    await buyBigEggAPI();
     await sleep(randomIntFromInterval(30 * 1e3, 45 * 1e3));
-    await claimTao();
+    await claimTaoAPI();
     await fetchInfo();
   }
 }
@@ -238,7 +254,7 @@ async function wrapBuyPageEgg() {
   if (canBuyPageEgg()) {
     await buyPageEgg();
     await sleep(randomIntFromInterval(10 * 1e3, 15 * 1e3));
-    await claimTao();
+    await claimTaoAPI();
     await fetchInfo();
   }
 }
@@ -247,7 +263,7 @@ async function wrapBuyPagesGangEgg() {
   if (canBuyPagesGangEgg()) {
     await buyPagesGangEgg();
     await sleep(randomIntFromInterval(15 * 1e3, 25 * 1e3));
-    await claimTao();
+    await claimTaoAPI();
     await fetchInfo();
   }
 }
@@ -256,7 +272,7 @@ async function wrapBuyFootballerEgg() {
   if (canBuyFootballerEgg()) {
     await buyFootballerEgg();
     await sleep(randomIntFromInterval(20 * 1e3, 30 * 1e3));
-    await claimTao();
+    await claimTaoAPI();
     await fetchInfo();
   }
 }
@@ -265,7 +281,7 @@ async function wrapBuyCrossbreedEgg() {
   if (canBuyCrossbreedEgg()) {
     await buyCrossbreedEgg();
     await sleep(randomIntFromInterval(30 * 1e3, 45 * 1e3));
-    await claimTao();
+    await claimTaoAPI();
     await fetchInfo();
   }
 }
@@ -275,7 +291,7 @@ async function wrapBuyBandEgg() {
     await buyBandEgg();
     await fetchInfo();
     await sleep(randomIntFromInterval(50 * 1e3, 75 * 1e3));
-    await claimTao();
+    await claimTaoAPI();
     await fetchInfo();
   }
 }
@@ -361,7 +377,6 @@ function canBuyBigEgg() {
   const diffSec = (now.getTime() - nextPetTimestamp.getTime()) / 1e3;
 
   const can = diffSec >= 0;
-
   if (!can) {
     console.debug(
       `[BIGEGG] next time to claim big egg: ${nextPetTimestamp.toLocaleString()}`,
@@ -371,24 +386,44 @@ function canBuyBigEgg() {
   return can;
 }
 
+function canUpgradeEgg() {
+  if (!gameInfo) {
+    return false;
+  }
+  const zenPurple = calculateZenPurple();
+  const firstUpgrade = getFirstUpgrade();
+  if (!firstUpgrade || !Object.keys(firstUpgrade).length) {
+    return false;
+  }
+
+  const can = zenPurple >= firstUpgrade.price;
+  if (!can) {
+    console.debug(
+      `unable to upgrade egg -- name ${getFirstUpgrade()?.name} -- price ${formarCurrency(getFirstUpgrade()?.price)}`,
+    );
+  }
+
+  return can;
+}
+
 function buyPageEgg() {
-  return buyFancyEgg(CAT_CATEGORY.PAGE);
+  return buyFancyEggAPI(CAT_CATEGORY.PAGE);
 }
 
 function buyPagesGangEgg() {
-  return buyFancyEgg(CAT_CATEGORY.PAGES_GANG);
+  return buyFancyEggAPI(CAT_CATEGORY.PAGES_GANG);
 }
 
 function buyFootballerEgg() {
-  return buyFancyEgg(CAT_CATEGORY.FOOTBALLER);
+  return buyFancyEggAPI(CAT_CATEGORY.FOOTBALLER);
 }
 
 function buyCrossbreedEgg() {
-  return buyFancyEgg(CAT_CATEGORY.CROSSBREED);
+  return buyFancyEggAPI(CAT_CATEGORY.CROSSBREED);
 }
 
 function buyBandEgg() {
-  return buyFancyEgg(CAT_CATEGORY.BAND);
+  return buyFancyEggAPI(CAT_CATEGORY.BAND);
 }
 
 function getPageEggPrice() {
@@ -446,6 +481,23 @@ function getEggsPrice() {
       current_price: egg.current_price,
     };
   });
+}
+
+function getFirstUpgrade() {
+  if (!gameInfo) {
+    return {};
+  }
+
+  const upgradesForPurchase = gameInfo?.zen_den?.upgrades_for_purchase;
+  if (!upgradesForPurchase) {
+    return {};
+  }
+
+  return {
+    id: upgradesForPurchase?.[0].id,
+    name: upgradesForPurchase?.[0].name,
+    price: upgradesForPurchase?.[0].price,
+  };
 }
 
 function calculateZenPurple() {
@@ -594,7 +646,7 @@ function fetchInfo() {
   });
 }
 
-function buyFancyEgg(catCategory) {
+function buyFancyEggAPI(catCategory) {
   return new Promise((resolve, reject) => {
     fetch(getUrl("/egg/api/den/buy-fancy-egg"), {
       headers: HEADERS,
@@ -620,7 +672,7 @@ function buyFancyEgg(catCategory) {
   });
 }
 
-function buyBigEgg() {
+function buyBigEggAPI() {
   return new Promise((resolve, reject) => {
     fetch(getUrl("/egg/api/den/gently-stroke-the-regenesis-egg"), {
       headers: HEADERS,
@@ -645,7 +697,7 @@ function buyBigEgg() {
   });
 }
 
-function claimTao() {
+function claimTaoAPI() {
   return new Promise((resolve, reject) => {
     fetch(getUrl("/egg/api/den/claim-tao"), {
       headers: HEADERS,
@@ -666,7 +718,7 @@ function claimTao() {
   });
 }
 
-function upgradeEgg(upgradeId) {
+function upgradeEggAPI(upgradeId) {
   return new Promise((resolve, reject) => {
     fetch(getUrl("/egg/api/den/upgrades/buy"), {
       headers: HEADERS,
