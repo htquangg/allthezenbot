@@ -1,17 +1,39 @@
 require("dotenv").config();
-require("./log");
 
 const cookie = require("cookie");
 const Fastify = require("fastify");
+const chalk = require("chalk");
+const { program } = require("commander");
 
+require("./log");
 const {
   sleep,
   formarCurrency,
   cleanupAndExit,
   randomIntFromInterval,
+  processEnv,
 } = require("./utils");
+const packageJson = require("./package.json");
 
-const X_ID_TOKEN = process.env.X_ID_TOKEN;
+program
+  .name(packageJson.name)
+  .description(packageJson.description)
+  .version(packageJson.version)
+  .option(
+    "-p, --port <port>",
+    "Specify the TCP port on which the server is listening for connections.",
+  )
+  .option(
+    "--x-id-token <x-id-token>",
+    "Specify the AllTheZen token on which server is using for authentication.",
+  )
+  .parse(process.argv);
+
+const cmdOpts = program.opts();
+
+const PORT = cmdOpts.port || processEnv("PORT");
+
+const X_ID_TOKEN = cmdOpts.xIdToken || processEnv("X_ID_TOKEN");
 
 const API_URL = "https://zenegg-api.production.cryptokitties.dapperlabs.com";
 
@@ -31,7 +53,7 @@ const HEADERS = {
 
 const MAX_NUMBER = Number.MAX_SAFE_INTEGER;
 
-const MAX_AGE = 300; // seconds
+const MAX_AGE = 60; // seconds
 
 const CAT_CATEGORY = {
   PAGE: "page",
@@ -81,7 +103,7 @@ function routeV1(fastify, _, done) {
         last_name: user?.last_name,
         username: user?.username,
       },
-      cat_category: targetCatCategory,
+      target_cat_category: targetCatCategory,
       zen: {
         purple: {
           total: formarCurrency(calculateZenPurple()),
@@ -118,10 +140,10 @@ function routeV1(fastify, _, done) {
 fastify.register(routeV1, { prefix: "/api/v1" });
 
 try {
-  fastify.listen({ port: Number(process.env.ZEN_PORT) || 3000 });
+  fastify.listen({ port: PORT });
 } catch (error) {
   console.error(err);
-  process.exit(1);
+  cleanupAndExit(1);
 }
 
 let targetCatCategory = CAT_CATEGORY.CROSSBREED;
@@ -140,24 +162,26 @@ let stop = false;
     try {
       await autoFetchInfo();
 
-      console.log("--------------------------------------------------");
-      console.log(`>>> username: ${getUser()?.username} <<<`);
+      console.debug("--------------------------------------------------");
       console.log(
-        `purple zen -- total ${formarCurrency(
-          calculateZenPurple(),
-        )} -- zps ${formarCurrency(getZPSPurle())}`,
+        `>>> username: ${chalk.bold.yellow(getUser()?.username)} <<<`,
       );
       console.log(
-        `yellow zen -- total ${formarCurrency(
-          calculateZenYellow(),
-        )} -- zps ${formarCurrency(getZPSYellow())}`,
+        `${chalk.bold.bgHex("#A45DF0")("[PURPLE]")} ZEN -- [TOTAL] ${chalk.bold.green(
+          formarCurrency(calculateZenPurple()),
+        )} -- [ZPS] ${chalk.bold.green(formarCurrency(getZPSPurle()))}`,
+      );
+      console.log(
+        `${chalk.bold.bgHex("#D9ED24")("[YELLOW]")} ZEN -- [TOTAL] ${chalk.bold.green(
+          formarCurrency(calculateZenYellow()),
+        )} -- [ZPS] ${chalk.bold.green(formarCurrency(getZPSYellow()))}`,
       );
       const eggs = getEggsPrice();
       eggs.map((egg) => {
-        console.log(
-          `id ${egg.internal_id} -- egg ${
-            egg.cat_category
-          } -- price ${formarCurrency(egg.current_price)}`,
+        console.debug(
+          `id ${chalk.red(egg.internal_id)} -- egg '${chalk.red(
+            egg.cat_category,
+          )}' -- price ${chalk.red(formarCurrency(egg.current_price))}`,
         );
       });
 
@@ -172,7 +196,7 @@ let stop = false;
     } catch (error) {
       console.error("unknown error: ", error);
     } finally {
-      await sleep(randomIntFromInterval(5 * 1e3, 15 * 1e3));
+      await sleep(randomIntFromInterval(5 * 1e3, 30 * 1e3));
     }
   }
 })();
@@ -244,7 +268,7 @@ async function wrapUpgradeEgg() {
 async function wrapBuyBigEgg() {
   if (canBuyBigEgg()) {
     await buyBigEggAPI();
-    await sleep(randomIntFromInterval(30 * 1e3, 45 * 1e3));
+    await sleep(randomIntFromInterval(20 * 1e3, 30 * 1e3));
     await claimTaoAPI();
     await fetchInfo();
   }
@@ -253,7 +277,7 @@ async function wrapBuyBigEgg() {
 async function wrapBuyPageEgg() {
   if (canBuyPageEgg()) {
     await buyPageEgg();
-    await sleep(randomIntFromInterval(10 * 1e3, 15 * 1e3));
+    await sleep(randomIntFromInterval(5 * 1e3, 10 * 1e3));
     await claimTaoAPI();
     await fetchInfo();
   }
@@ -262,7 +286,7 @@ async function wrapBuyPageEgg() {
 async function wrapBuyPagesGangEgg() {
   if (canBuyPagesGangEgg()) {
     await buyPagesGangEgg();
-    await sleep(randomIntFromInterval(15 * 1e3, 25 * 1e3));
+    await sleep(randomIntFromInterval(5 * 1e3, 15 * 1e3));
     await claimTaoAPI();
     await fetchInfo();
   }
@@ -271,7 +295,7 @@ async function wrapBuyPagesGangEgg() {
 async function wrapBuyFootballerEgg() {
   if (canBuyFootballerEgg()) {
     await buyFootballerEgg();
-    await sleep(randomIntFromInterval(20 * 1e3, 30 * 1e3));
+    await sleep(randomIntFromInterval(10 * 1e3, 25 * 1e3));
     await claimTaoAPI();
     await fetchInfo();
   }
@@ -280,7 +304,7 @@ async function wrapBuyFootballerEgg() {
 async function wrapBuyCrossbreedEgg() {
   if (canBuyCrossbreedEgg()) {
     await buyCrossbreedEgg();
-    await sleep(randomIntFromInterval(30 * 1e3, 45 * 1e3));
+    await sleep(randomIntFromInterval(15 * 1e3, 30 * 1e3));
     await claimTaoAPI();
     await fetchInfo();
   }
@@ -290,70 +314,30 @@ async function wrapBuyBandEgg() {
   if (canBuyBandEgg()) {
     await buyBandEgg();
     await fetchInfo();
-    await sleep(randomIntFromInterval(50 * 1e3, 75 * 1e3));
+    await sleep(randomIntFromInterval(20 * 1e3, 45 * 1e3));
     await claimTaoAPI();
     await fetchInfo();
   }
 }
 
 function canBuyPageEgg() {
-  const can = canBuyEgg(CAT_CATEGORY.PAGE);
-  if (!can) {
-    console.debug(
-      `unable to buy 'page' egg -- price: ${formarCurrency(
-        getPageEggPrice(),
-      )} -- totalPurleZen: ${formarCurrency(calculateZenPurple())}`,
-    );
-  }
-  return can;
+  return canBuyEgg(CAT_CATEGORY.PAGE);
 }
 
 function canBuyPagesGangEgg() {
-  const can = canBuyEgg(CAT_CATEGORY.PAGES_GANG);
-  if (!can) {
-    console.debug(
-      `unable to buy 'pages_gang' egg -- price: ${formarCurrency(
-        getPagesGangEggPrice(),
-      )} -- totalPurleZen: ${formarCurrency(calculateZenPurple())}`,
-    );
-  }
-  return can;
+  return canBuyEgg(CAT_CATEGORY.PAGES_GANG);
 }
 
 function canBuyFootballerEgg() {
-  can = canBuyEgg(CAT_CATEGORY.FOOTBALLER);
-  if (!can) {
-    console.debug(
-      `unable to buy 'footballer' egg -- price: ${formarCurrency(
-        getFootballerEggPrice(),
-      )} -- totalPurleZen: ${formarCurrency(calculateZenPurple())}`,
-    );
-  }
-  return can;
+  return canBuyEgg(CAT_CATEGORY.FOOTBALLER);
 }
 
 function canBuyCrossbreedEgg() {
-  const can = canBuyEgg(CAT_CATEGORY.CROSSBREED);
-  if (!can) {
-    console.debug(
-      `unable to buy 'crossbreed' egg -- price: ${formarCurrency(
-        getCrossbreedEggPrice(),
-      )} -- totalPurleZen: ${formarCurrency(calculateZenPurple())}`,
-    );
-  }
-  return can;
+  return canBuyEgg(CAT_CATEGORY.CROSSBREED);
 }
 
 function canBuyBandEgg() {
-  const can = canBuyEgg(CAT_CATEGORY.BAND);
-  if (!can) {
-    console.debug(
-      `unable to buy 'band' egg -- price: ${formarCurrency(
-        getBandEggPrice(),
-      )} -- totalPurleZen: ${formarCurrency(calculateZenPurple())}`,
-    );
-  }
-  return can;
+  return canBuyEgg(CAT_CATEGORY.BAND);
 }
 
 function canBuyEgg(catCategory) {
@@ -362,7 +346,17 @@ function canBuyEgg(catCategory) {
   }
   const zenPurple = calculateZenPurple();
   const priceEgg = getEggPrice(catCategory);
-  return zenPurple >= priceEgg;
+
+  const can = zenPurple >= priceEgg;
+  if (!can) {
+    console.debug(
+      `unable to ${chalk.bold.red("buy")} egg -- name '${chalk.red(catCategory)}' -- price: ${chalk.red(
+        formarCurrency(priceEgg),
+      )}`,
+    );
+  }
+
+  return can;
 }
 
 function canBuyBigEgg() {
@@ -379,7 +373,7 @@ function canBuyBigEgg() {
   const can = diffSec >= 0;
   if (!can) {
     console.debug(
-      `[BIGEGG] next time to claim big egg: ${nextPetTimestamp.toLocaleString()}`,
+      `${chalk.bold.red("[BIG-EGG]")} next time to claim big egg: ${chalk.bold.red(nextPetTimestamp.toLocaleString())}`,
     );
   }
 
@@ -399,7 +393,9 @@ function canUpgradeEgg() {
   const can = zenPurple >= firstUpgrade.price;
   if (!can) {
     console.debug(
-      `unable to upgrade egg -- name ${getFirstUpgrade()?.name} -- price ${formarCurrency(getFirstUpgrade()?.price)}`,
+      `unable to ${chalk.bold.red("upgrade")} egg -- name '${chalk.red(
+        getFirstUpgrade()?.name,
+      )}' -- price ${chalk.red(formarCurrency(getFirstUpgrade()?.price))}`,
     );
   }
 
@@ -510,7 +506,7 @@ function calculateZenPurple() {
 
   const now = new Date();
   const diffSec = (now.getTime() - lastGameInfo?.getTime()) / 1e3;
-  return gameInfo.zen_den?.zen_status?.zen_count + getZPSPurle() * diffSec;
+  return gameInfo.zen_den?.zen_status?.zen_count + getZPSPurle() * diffSec || 0;
 }
 
 function calculateZenYellow() {
@@ -525,15 +521,12 @@ function calculateZenYellow() {
   const diffSec = (now.getTime() - lastGameInfo?.getTime()) / 1e3;
   return (
     gameInfo.zen_den?.regenesis_egg_status?.zen_accumulated +
-    getZPSYellow() * diffSec
+      getZPSYellow() * diffSec || 0
   );
 }
 
 function getZPSPurle() {
   if (!gameInfo) {
-    return 0;
-  }
-  if (!lastGameInfo) {
     return 0;
   }
 
@@ -542,9 +535,6 @@ function getZPSPurle() {
 
 function getZPSYellow() {
   if (!gameInfo) {
-    return 0;
-  }
-  if (!lastGameInfo) {
     return 0;
   }
 
@@ -635,6 +625,10 @@ function fetchInfo() {
     })
       .then(async (res) => {
         const payload = await res.json();
+        if (payload?.error) {
+          resolve({});
+          return;
+        }
         gameInfo = payload;
         lastGameInfo = new Date();
         resolve(payload);
@@ -740,6 +734,7 @@ function upgradeEggAPI(upgradeId) {
 }
 
 function responseSuccess(reply, data) {
+  reply.status = 200;
   if (data) {
     return { code: 200, status: "OK", data };
   }

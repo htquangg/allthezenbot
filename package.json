@@ -1,7 +1,13 @@
 {
-  "name": "allthezenbot",
+  "author": {
+    "name": "Alex HUYNH",
+    "email": "htquangg@gmail.com",
+    "url": "https://www.linkedin.com/in/htquangg/"
+  },
+  "name": "azen",
   "version": "0.0.0",
   "description": "All the zen BOT",
+  "license": "Dont be a shitty human being and make your own solution.",
   "main": "index.js",
   "scripts": {
     "dev": "node index.js"
@@ -10,12 +16,12 @@
     "allthezen",
     "bot"
   ],
-  "author": "htquangg",
   "engines": {
     "node": ">=22.0.0"
   },
-  "license": "Dont be a shitty human being and make your own solution.",
   "dependencies": {
+    "chalk": "4.1.2",
+    "commander": "^12.1.0",
     "cookie": "^0.7.1",
     "dotenv": "^16.4.5",
     "fastify": "^5.0.0"

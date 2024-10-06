@@ -60,10 +60,15 @@ function cleanupAndExit(code = 0) {
   process.exit(code);
 }
 
+function processEnv(key) {
+  return process.env[`AZEN_${key}`];
+}
+
 module.exports = {
   sleep,
   formarCurrency,
   randomIntFromInterval,
   getDate,
   cleanupAndExit,
+  processEnv,
 };
