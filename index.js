@@ -1,5 +1,8 @@
 require("dotenv").config();
 
+var cookie = require("cookie");
+const Fastify = require("fastify");
+
 require("./log");
 
 const { sleep, formarCurrency, cleanupAndExit } = require("./utils");
@@ -83,7 +86,6 @@ function catCategoryNumberToString(catCategory) {
 let gameInfo = {};
 let lastGameInfo = null;
 
-const Fastify = require("fastify");
 const fastify = Fastify({
   logger: true,
   disableRequestLogging: true,
@@ -105,22 +107,44 @@ function routeV1(fastify, opts, done) {
     }
     return responseSuccess(reply);
   });
-  fastify.get("/zen/purple", function handler(_, reply) {
+  fastify.get("/debug/info", function handler(_, reply) {
     if (!Object.keys(gameInfo).length) {
       return responseFailure(reply);
     }
-    return responseSuccess(reply, {
-      total: formarCurrency(calculateZenPurple()),
-      zps: formarCurrency(getZPSPurle()),
-    });
-  });
-  fastify.get("/zen/yellow", function handler(_, reply) {
-    if (!Object.keys(gameInfo).length) {
+    const now = new Date();
+    const diffSec = (now.getTime() - (lastGameInfo?.getTime() || 0)) / 1000;
+    if (diffSec >= MAX_AGE) {
       return responseFailure(reply);
     }
+
+    const cookies = cookie.parse(X_ID_TOKEN);
+
+    let jsonCookies = null;
+    try {
+      jsonCookies = JSON.parse(
+        cookies?.user?.substring(0, cookies?.user?.indexOf("&chat_instance")),
+      );
+    } catch (error) {
+      console.error("failed to extract user info: ", error);
+    }
+
     return responseSuccess(reply, {
-      total: formarCurrency(calculateZenYellow()),
-      zps: formarCurrency(getZPSYellow()),
+      user: {
+        first_name: jsonCookies?.first_name,
+        last_name: jsonCookies?.last_name,
+        username: jsonCookies?.username,
+      },
+      cat_category: TARGET_CAT_CATEGORY,
+      zen: {
+        purple: {
+          total: formarCurrency(calculateZenPurple()),
+          zps: formarCurrency(getZPSPurle()),
+        },
+        yellow: {
+          total: formarCurrency(calculateZenYellow()),
+          zps: formarCurrency(getZPSYellow()),
+        },
+      },
     });
   });
   fastify.get("/eggs/buy/:catCategory", async function handler(request, reply) {
@@ -139,7 +163,7 @@ function routeV1(fastify, opts, done) {
 fastify.register(routeV1, { prefix: "/api/v1" });
 
 try {
-  fastify.listen({ port: 3000 });
+  fastify.listen({ port: Number(process.env.ZEN_PORT) || 3000 });
 } catch (error) {
   console.error(err);
   process.exit(1);
