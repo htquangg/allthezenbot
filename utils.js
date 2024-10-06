@@ -12,16 +12,23 @@ function sleep(ms) {
 }
 
 function formarCurrency(labelValue) {
-  // Nine Zeroes for Billions
-  return Math.abs(Number(labelValue)) >= 1.0e9
-    ? (Math.abs(Number(labelValue)) / 1.0e9).toFixed(2) + "B"
-    : // Six Zeroes for Millions
-      Math.abs(Number(labelValue)) >= 1.0e6
-      ? (Math.abs(Number(labelValue)) / 1.0e6).toFixed(2) + "M"
-      : // Three Zeroes for Thousands
-        Math.abs(Number(labelValue)) >= 1.0e3
-        ? (Math.abs(Number(labelValue)) / 1.0e3).toFixed(2) + "K"
-        : Math.abs(Number(labelValue));
+  return Math.abs(Number(labelValue)) >= 1.0e24
+    ? (Math.abs(Number(labelValue)) / 1.0e24).toFixed(3) + "Y"
+    : Math.abs(Number(labelValue)) >= 1.0e21
+      ? (Math.abs(Number(labelValue)) / 1.0e21).toFixed(3) + "Z"
+      : Math.abs(Number(labelValue)) >= 1.0e18
+        ? (Math.abs(Number(labelValue)) / 1.0e18).toFixed(3) + "E"
+        : Math.abs(Number(labelValue)) >= 1.0e15
+          ? (Math.abs(Number(labelValue)) / 1.0e15).toFixed(3) + "P"
+          : Math.abs(Number(labelValue)) >= 1.0e12
+            ? (Math.abs(Number(labelValue)) / 1.0e12).toFixed(3) + "T"
+            : Math.abs(Number(labelValue)) >= 1.0e9
+              ? (Math.abs(Number(labelValue)) / 1.0e9).toFixed(3) + "B"
+              : Math.abs(Number(labelValue)) >= 1.0e6
+                ? (Math.abs(Number(labelValue)) / 1.0e6).toFixed(3) + "M"
+                : Math.abs(Number(labelValue)) >= 1.0e3
+                  ? (Math.abs(Number(labelValue)) / 1.0e3).toFixed(3) + "K"
+                  : Math.abs(Number(labelValue));
 }
 
 function randomIntFromInterval(min, max) {
