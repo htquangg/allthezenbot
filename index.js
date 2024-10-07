@@ -17,6 +17,7 @@ const packageJson = require("./package.json");
 const {
   sendUrgentBigEggNotification,
   sendNotification,
+  sendAlreadyClaimBigEggNotification,
 } = require("./notification");
 
 program
@@ -249,7 +250,7 @@ process.on("unhandledRejection", async (reason, promise) => {
   await sendNotification({
     message: `*[ERROR][UNHANDLED_REJECTION] AZenBOT @${
       getUser()?.username
-    }*\n${reason}`,
+    }*\n${reason?.message() || reason}\n${reason?.stack}`,
   });
   stop = true;
   fastify?.close();
@@ -330,9 +331,19 @@ async function wrapBuyBigEgg() {
     return;
   }
   await buyBigEggAPI();
-  await sleep(randomIntFromInterval(20 * 1e3, 30 * 1e3));
+  await sleep(randomIntFromInterval(3 * 1e3, 5 * 1e3));
+  await claimFancyParadeKittyAPI();
+  await sleep(randomIntFromInterval(5 * 1e3, 7 * 1e3));
+  await claimZenModeTaoAPI();
+  await sleep(randomIntFromInterval(10 * 1e3, 30 * 1e3));
   await claimTaoAPI();
   await fetchInfo();
+
+  // TOIMPROVE: will be emit event
+  await sendAlreadyClaimBigEggNotification({
+    nextPetTimestamp:
+      getNextPetTimestamp() === MAX_NUMBER ? null : getNextPetTimestamp(),
+  });
 }
 
 async function wrapBuyPageEgg() {
@@ -788,6 +799,56 @@ function claimTaoAPI() {
       })
       .catch((error) => {
         console.error("failed to claim tao", error);
+        reject(error);
+      });
+  });
+}
+
+let tapFancyParadeKitty = randomIntFromInterval(25, 50);
+
+function claimFancyParadeKittyAPI() {
+  tapFancyParadeKitty = randomIntFromInterval(25, 50);
+
+  const now = new Date();
+
+  return new Promise((resolve, reject) => {
+    fetch(getUrl("/egg/api/den/claim-fancy-parade-kitty"), {
+      headers: HEADERS,
+      body: JSON.stringify({
+        fancy_parade_kitty_claim_id: `${now.toISOString().split("T")[0]}:${tapFancyParadeKitty}`,
+      }),
+      method: "POST",
+    })
+      .then(async (res) => {
+        const payload = await res.json();
+        console.debug("[success] claim fancy parade kitty", payload);
+        resolve(payload);
+      })
+      .catch((error) => {
+        console.error("failed to claim fancy parade kitty", error);
+        reject(error);
+      });
+  });
+}
+
+function claimZenModeTaoAPI() {
+  return new Promise((resolve, reject) => {
+    fetch(getUrl("/egg/api/den/claim-zen-mode-tao"), {
+      headers: HEADERS,
+      body: JSON.stringify({
+        taps: tapFancyParadeKitty * 2,
+      }),
+      method: "POST",
+    })
+      .then(async (res) => {
+        const payload = await res.json();
+        if (payload?.claim?.id) {
+          console.log("[success] claim zen mode tao", payload?.claim?.id);
+        }
+        resolve(payload);
+      })
+      .catch((error) => {
+        console.error("failed to claim zen mode tao", error);
         reject(error);
       });
   });

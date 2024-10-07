@@ -8,16 +8,28 @@ async function sendUrgentBigEggNotification(payload) {
     return;
   }
   const now = new Date();
-  const nextPetTimestamp = new Date(payload.nextPetTimestamp);
-  const diffSec = ((nextPetTimestamp?.getTime() || 0) - now.getTime()) / 1000;
-  const message = `*BIG EGG URGENT ${
+  const nextPetDate = new Date(payload.nextPetTimestamp);
+  const diffSec = ((nextPetDate?.getTime() || 0) - now.getTime()) / 1000;
+  const message = `*[HOT] BIG EGG READY ${
     payload?.username ? `@${payload.username}` : ""
   }*\nBig Egg is ready to be *claimed*.\nCountdown: *${
     diffSec > 0 ? convertSecondsToHIS(diffSec) : "00:00:00"
   }*\n${ALL_THE_ZEN_BOT_URL}`;
   return await sendTelegramNotification({
     message: message,
-    parse_mode: "Markdown",
+  });
+}
+
+async function sendAlreadyClaimBigEggNotification(payload) {
+  if (!payload?.nextPetTimestamp) {
+    return;
+  }
+  const nextPetDate = new Date(payload.nextPetTimestamp);
+  const message = `*[HOT] BIG EGG CLAIMED ${
+    payload?.username ? `@${payload.username}` : ""
+  }*\nBig Egg is already taken.\nNext: *${nextPetDate.toLocaleString()}*\n${ALL_THE_ZEN_BOT_URL}`;
+  return await sendTelegramNotification({
+    message: message,
   });
 }
 
@@ -59,4 +71,5 @@ function getTelegramGroupId() {
 module.exports = {
   sendNotification,
   sendUrgentBigEggNotification,
+  sendAlreadyClaimBigEggNotification,
 };
