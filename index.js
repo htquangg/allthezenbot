@@ -14,6 +14,10 @@ const {
   processEnv,
 } = require("./utils");
 const packageJson = require("./package.json");
+const {
+  sendUrgentBigEggNotification,
+  sendNotification,
+} = require("./notification");
 
 program
   .name(packageJson.name)
@@ -53,7 +57,11 @@ const HEADERS = {
 
 const MAX_NUMBER = Number.MAX_SAFE_INTEGER;
 
-const MAX_AGE = 60; // seconds
+const MAX_AGE_SEC = 60;
+
+const URGENT_NOTIFY_GAME_INFO_NOT_REFRESH_SEC = 180;
+
+const URGENT_CLAIM_BIG_EGG_SEC = 300;
 
 const CAT_CATEGORY = {
   PAGE: "page",
@@ -79,7 +87,7 @@ function routeV1(fastify, _, done) {
     }
     const now = new Date();
     const diffSec = (now.getTime() - (lastGameInfo?.getTime() || 0)) / 1000;
-    if (diffSec >= MAX_AGE) {
+    if (diffSec >= MAX_AGE_SEC) {
       return responseFailure(reply, null, 500);
     }
     return responseSuccess(reply);
@@ -91,7 +99,7 @@ function routeV1(fastify, _, done) {
     }
     const now = new Date();
     const diffSec = (now.getTime() - (lastGameInfo?.getTime() || 0)) / 1000;
-    if (diffSec >= MAX_AGE) {
+    if (diffSec >= MAX_AGE_SEC) {
       return responseFailure(reply, null, 500);
     }
 
@@ -143,6 +151,9 @@ try {
   fastify.listen({ port: PORT });
 } catch (error) {
   console.error(err);
+  sendNotification({
+    message: `*[ERROR][SERVER] AZenBOT @${getUser()?.username}*\n${error}`,
+  });
   cleanupAndExit(1);
 }
 
@@ -150,10 +161,14 @@ let targetCatCategory = CAT_CATEGORY.CROSSBREED;
 
 let gameInfo = {};
 let lastGameInfo = null;
+let lastGameInfoNotRefresh = null;
 
 let stop = false;
 
 (async function main() {
+  await sendNotification({
+    message: `*[START] AZenBOT @${getUser()?.username}*`,
+  });
   try {
     await claimTaoAPI();
   } catch (error) {}
@@ -162,17 +177,33 @@ let stop = false;
     try {
       await autoFetchInfo();
 
+      if (shouldNotifyGameInfoNotRefresh()) {
+        await sendNotification({
+          message: `*[ERROR][GAME_INFO_NOT_REFRESH] AZenBOT @${
+            getUser()?.username
+          }*\nLastGameInfo: *${
+            lastGameInfo?.toLocaleString()
+              ? lastGameInfo?.toLocaleString()
+              : "Cann't detect!!!"
+          }*`,
+        });
+      }
+
       console.debug("--------------------------------------------------");
       console.log(
         `>>> username: ${chalk.bold.yellow(getUser()?.username)} <<<`,
       );
       console.log(
-        `${chalk.bold.bgHex("#A45DF0")("[PURPLE]")} ZEN -- [TOTAL] ${chalk.bold.green(
+        `${chalk.bold.bgHex("#A45DF0")(
+          "[PURPLE]",
+        )} ZEN -- [TOTAL] ${chalk.bold.green(
           formarCurrency(calculateZenPurple()),
         )} -- [ZPS] ${chalk.bold.green(formarCurrency(getZPSPurle()))}`,
       );
       console.log(
-        `${chalk.bold.bgHex("#D9ED24")("[YELLOW]")} ZEN -- [TOTAL] ${chalk.bold.green(
+        `${chalk.bold.bgHex("#D9ED24")(
+          "[YELLOW]",
+        )} ZEN -- [TOTAL] ${chalk.bold.green(
           formarCurrency(calculateZenYellow()),
         )} -- [ZPS] ${chalk.bold.green(formarCurrency(getZPSYellow()))}`,
       );
@@ -213,8 +244,13 @@ process.on("SIGTERM", () => {
   cleanupAndExit(0);
 });
 
-process.on("unhandledRejection", (reason, promise) => {
+process.on("unhandledRejection", async (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
+  await sendNotification({
+    message: `*[ERROR][UNHANDLED_REJECTION] AZenBOT @${
+      getUser()?.username
+    }*\n${reason}`,
+  });
   stop = true;
   fastify?.close();
   cleanupAndExit(1);
@@ -223,9 +259,22 @@ process.on("unhandledRejection", (reason, promise) => {
 async function autoFetchInfo() {
   const now = new Date();
   const diffSec = (now.getTime() - (lastGameInfo?.getTime() || 0)) / 1000;
-  if (diffSec >= MAX_AGE) {
+  if (diffSec >= MAX_AGE_SEC) {
     await fetchInfo();
   }
+}
+
+function shouldNotifyGameInfoNotRefresh() {
+  const now = new Date();
+  const diffSec = (now.getTime() - (lastGameInfo?.getTime() || 0)) / 1000;
+  const should = !!(
+    diffSec >= URGENT_NOTIFY_GAME_INFO_NOT_REFRESH_SEC &&
+    (now.getTime() - (lastGameInfoNotRefresh?.getTime() || 0)) / 1000
+  );
+  if (should) {
+    lastGameInfoNotRefresh = now;
+  }
+  return should;
 }
 
 async function wrapBuyEgg(catCategory) {
@@ -266,12 +315,24 @@ async function wrapUpgradeEgg() {
 }
 
 async function wrapBuyBigEgg() {
-  if (canBuyBigEgg()) {
-    await buyBigEggAPI();
-    await sleep(randomIntFromInterval(20 * 1e3, 30 * 1e3));
-    await claimTaoAPI();
-    await fetchInfo();
+  if (!canBuyBigEgg()) {
+    const shouldNotify =
+      getDiffSecToNextPet() <= 0
+        ? Math.abs(getDiffSecToNextPet()) <= URGENT_CLAIM_BIG_EGG_SEC
+        : false;
+    if (shouldNotify) {
+      await sendUrgentBigEggNotification({
+        username: getUser()?.username,
+        nextPetTimestamp:
+          getNextPetTimestamp() === MAX_NUMBER ? null : getNextPetTimestamp(),
+      });
+    }
+    return;
   }
+  await buyBigEggAPI();
+  await sleep(randomIntFromInterval(20 * 1e3, 30 * 1e3));
+  await claimTaoAPI();
+  await fetchInfo();
 }
 
 async function wrapBuyPageEgg() {
@@ -347,12 +408,12 @@ function canBuyEgg(catCategory) {
   const zenPurple = calculateZenPurple();
   const priceEgg = getEggPrice(catCategory);
 
-  const can = zenPurple >= priceEgg;
+  const can = !!(zenPurple >= priceEgg);
   if (!can) {
     console.debug(
-      `unable to ${chalk.bold.red("buy")} egg -- name '${chalk.red(catCategory)}' -- price: ${chalk.red(
-        formarCurrency(priceEgg),
-      )}`,
+      `unable to ${chalk.bold.red("buy")} egg -- name '${chalk.red(
+        catCategory,
+      )}' -- price: ${chalk.red(formarCurrency(priceEgg))}`,
     );
   }
 
@@ -363,17 +424,17 @@ function canBuyBigEgg() {
   if (!gameInfo) {
     return false;
   }
-
-  const now = new Date();
-  const nextPetTimestamp = new Date(
-    gameInfo?.zen_den?.regenesis_egg_status?.next_pet_timestamp,
+  const can = !!(
+    getDiffSecToNextPet() >= 0 && getNextPetTimestamp() !== MAX_NUMBER
   );
-  const diffSec = (now.getTime() - nextPetTimestamp.getTime()) / 1e3;
-
-  const can = diffSec >= 0;
   if (!can) {
+    const nextPetDate = new Date(getNextPetTimestamp());
     console.debug(
-      `${chalk.bold.red("[BIG-EGG]")} next time to claim big egg: ${chalk.bold.red(nextPetTimestamp.toLocaleString())}`,
+      `${chalk.bold.red(
+        "[BIG-EGG]",
+      )} next time to claim big egg: ${chalk.bold.red(
+        nextPetDate.toLocaleString(),
+      )}`,
     );
   }
 
@@ -390,7 +451,7 @@ function canUpgradeEgg() {
     return false;
   }
 
-  const can = zenPurple >= firstUpgrade.price;
+  const can = !!(zenPurple >= firstUpgrade.price);
   if (!can) {
     console.debug(
       `unable to ${chalk.bold.red("upgrade")} egg -- name '${chalk.red(
@@ -608,6 +669,26 @@ function getUser() {
   }
 
   return jsonCookies;
+}
+
+function getDiffSecToNextPet() {
+  const now = new Date();
+  const nextPetTimestamp = getNextPetTimestamp();
+  if (nextPetTimestamp === MAX_NUMBER) {
+    return MAX_NUMBER;
+  }
+  const nextPetDate = new Date(getNextPetTimestamp());
+  return (now.getTime() - nextPetDate.getTime()) / 1e3;
+}
+
+function getNextPetTimestamp() {
+  if (!gameInfo) {
+    return MAX_NUMBER;
+  }
+
+  return (
+    gameInfo.zen_den?.regenesis_egg_status?.next_pet_timestamp || MAX_NUMBER
+  );
 }
 
 function getUrl(path) {

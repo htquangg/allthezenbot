@@ -30,6 +30,19 @@ function formarCurrency(labelValue) {
                   ? (Math.abs(Number(labelValue)) / 1.0e3).toFixed(3) + "K"
                   : Math.abs(Number(labelValue));
 }
+function convertSecondsToHIS(seconds) {
+  const pad = (num) => (num < 10 ? `0${num}` : num);
+
+  const H = pad(Math.floor(seconds / 3600).toFixed(0));
+  const i = pad(Math.floor((seconds % 3600) / 60).toFixed(0));
+  const s = pad((seconds % 60).toFixed(0));
+
+  if (H <= 0) {
+    return `${i}m:${s}s`;
+  }
+
+  return `${H}h:${i}m:${s}s`;
+}
 
 function randomIntFromInterval(min, max) {
   // min and max included
@@ -71,4 +84,5 @@ module.exports = {
   getDate,
   cleanupAndExit,
   processEnv,
+  convertSecondsToHIS,
 };
