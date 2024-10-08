@@ -15,10 +15,11 @@ const {
 } = require("./utils");
 const packageJson = require("./package.json");
 const {
-  sendUrgentBigEggNotification,
   sendNotification,
+  sendUrgentBigEggNotification,
   sendAlreadyClaimBigEggNotification,
 } = require("./notification");
+const { eventBus } = require("./bus");
 
 program
   .name(packageJson.name)
@@ -148,17 +149,85 @@ function routeV1(fastify, _, done) {
 
 fastify.register(routeV1, { prefix: "/api/v1" });
 
+eventBus.on("server.started", async function handleEventServerStarted(payload) {
+  const { username } = payload;
+  await sendNotification({
+    message: `*[START] AZenBOT @${username}*`,
+  });
+});
+
+eventBus.on(
+  "error.game_info_not_refreshed",
+  async function handleEventGameInfoNotRefresh(payload) {
+    const { username, lastGameInfo } = payload;
+    await sendNotification({
+      message: `*[ERROR][GAME_INFO_NOT_REFRESH] AZenBOT @${username}*\nLastGameInfo: *${
+        lastGameInfo ? lastGameInfo : "Cann't detect!!!"
+      }*`,
+    });
+  },
+);
+
+eventBus.on(
+  "big_egg.ready_to_claim",
+  async function handleEventBigEggReadyToClaim(payload) {
+    const { username, nextPetTimestamp } = payload;
+    await sendUrgentBigEggNotification({
+      username,
+      nextPetTimestamp,
+    });
+  },
+);
+
+eventBus.on(
+  "big_egg.already_claimed",
+  async function handleEventBigEggAlreadyClaimed(payload) {
+    const { nextPetTimestamp } = payload;
+    await sendAlreadyClaimBigEggNotification({
+      nextPetTimestamp,
+    });
+  },
+);
+
+eventBus.on("error.server", async function handleEventServerError(payload) {
+  const { username, error } = payload;
+  await sendNotification({
+    message: `*[ERROR][SERVER] AZenBOT @${username}*\n${error?.msg}\n${error.stack}`,
+  });
+});
+
+eventBus.on(
+  "error.unhandled_rejection",
+  async function handleEventUnhandledRejection(payload) {
+    const { username, error } = payload;
+    await sendNotification({
+      message: `*[ERROR][UNHANDLED_REJECTION] AZenBOT @${username}*\n${error?.msg}\n${error?.stack}`,
+    });
+  },
+);
+
+eventBus.on("error.zen.api", async function handleErrorZenAPI(payload) {
+  const { username, error } = payload;
+  await sendNotification({
+    message: `*[ERROR][ZEN][API] AZenBOT @${username}*\n${error?.msg}`,
+  });
+});
+
 try {
   fastify.listen({ port: PORT });
 } catch (error) {
   console.error(err);
-  sendNotification({
-    message: `*[ERROR][SERVER] AZenBOT @${getUser()?.username}*\n${error}`,
+  eventBus.dispatchAsync("error.server", {
+    username: getUser().username,
+    error: {
+      msg: error?.msg(),
+      stack: error?.stack,
+    },
   });
   cleanupAndExit(1);
 }
 
-let targetCatCategory = CAT_CATEGORY.CROSSBREED;
+let targetCatCategory = CAT_CATEGORY.BAND;
 
 let gameInfo = {};
 let lastGameInfo = null;
@@ -167,8 +236,8 @@ let lastGameInfoNotRefresh = null;
 let stop = false;
 
 (async function main() {
-  await sendNotification({
-    message: `*[START] AZenBOT @${getUser()?.username}*`,
+  await eventBus.dispatchAsync("server.started", {
+    username: getUser()?.username,
   });
   try {
     await claimTaoAPI();
@@ -179,14 +248,9 @@ let stop = false;
       await autoFetchInfo();
 
       if (shouldNotifyGameInfoNotRefresh()) {
-        await sendNotification({
-          message: `*[ERROR][GAME_INFO_NOT_REFRESH] AZenBOT @${
-            getUser()?.username
-          }*\nLastGameInfo: *${
-            lastGameInfo?.toLocaleString()
-              ? lastGameInfo?.toLocaleString()
-              : "Cann't detect!!!"
-          }*`,
+        await eventBus.dispatchAsync("error.game_info_not_refreshed", {
+          username: getUser()?.username,
+          lastGameInfo: lastGameInfo?.toLocaleString() || null,
         });
       }
 
@@ -245,12 +309,14 @@ process.on("SIGTERM", () => {
   cleanupAndExit(0);
 });
 
-process.on("unhandledRejection", async (reason, promise) => {
-  console.error("Unhandled Rejection at:", promise, "reason:", reason);
-  await sendNotification({
-    message: `*[ERROR][UNHANDLED_REJECTION] AZenBOT @${
-      getUser()?.username
-    }*\n${reason?.message() || reason}\n${reason?.stack}`,
+process.on("unhandledRejection", async (error, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", error);
+  await eventBus.dispatchAsync("error.unhandled_rejection", {
+    username: getUser()?.username,
+    error: {
+      msg: error?.message || error,
+      stack: error?.stack,
+    },
   });
   stop = true;
   fastify?.close();
@@ -322,7 +388,7 @@ async function wrapBuyBigEgg() {
         ? Math.abs(getDiffSecToNextPet()) <= URGENT_CLAIM_BIG_EGG_SEC
         : false;
     if (shouldNotify) {
-      await sendUrgentBigEggNotification({
+      await eventBus.dispatchAsync("big_egg.ready_to_claim", {
         username: getUser()?.username,
         nextPetTimestamp:
           getNextPetTimestamp() === MAX_NUMBER ? null : getNextPetTimestamp(),
@@ -330,7 +396,14 @@ async function wrapBuyBigEgg() {
     }
     return;
   }
+
   await buyBigEggAPI();
+
+  await eventBus.dispatchAsync("big_egg.already_claimed", {
+    nextPetTimestamp:
+      getNextPetTimestamp() === MAX_NUMBER ? null : getNextPetTimestamp(),
+  });
+
   await sleep(randomIntFromInterval(3 * 1e3, 5 * 1e3));
   await claimFancyParadeKittyAPI();
   await sleep(randomIntFromInterval(5 * 1e3, 7 * 1e3));
@@ -338,12 +411,6 @@ async function wrapBuyBigEgg() {
   await sleep(randomIntFromInterval(10 * 1e3, 30 * 1e3));
   await claimTaoAPI();
   await fetchInfo();
-
-  // TOIMPROVE: will be emit event
-  await sendAlreadyClaimBigEggNotification({
-    nextPetTimestamp:
-      getNextPetTimestamp() === MAX_NUMBER ? null : getNextPetTimestamp(),
-  });
 }
 
 async function wrapBuyPageEgg() {
@@ -726,7 +793,13 @@ function fetchInfo() {
         resolve(payload);
       })
       .catch((error) => {
-        console.error("failed to fetch info", error);
+        console.error("failed to fetch game info", error);
+        eventBus.dispatch("error.zen.api", {
+          username: getUser()?.username,
+          error: {
+            msg: error.message || "unable to fetch game info",
+          },
+        });
         reject(error);
       });
   });
@@ -753,6 +826,12 @@ function buyFancyEggAPI(catCategory) {
       })
       .catch((error) => {
         console.error("failed to buy fancy egg", error);
+        eventBus.dispatch("error.zen.api", {
+          username: getUser()?.username,
+          error: {
+            msg: error.message || "unable to buy fancy egg",
+          },
+        });
         reject(error);
       });
   });
@@ -778,6 +857,12 @@ function buyBigEggAPI() {
       })
       .catch((error) => {
         console.error("failed to buy big egg", error);
+        eventBus.dispatch("error.zen.api", {
+          username: getUser()?.username,
+          error: {
+            msg: error.message || "unable to buy big egg",
+          },
+        });
         reject(error);
       });
   });
@@ -799,15 +884,21 @@ function claimTaoAPI() {
       })
       .catch((error) => {
         console.error("failed to claim tao", error);
+        eventBus.dispatch("error.zen.api", {
+          username: getUser()?.username,
+          error: {
+            msg: error.message || "unable to claim tao",
+          },
+        });
         reject(error);
       });
   });
 }
 
-let tapFancyParadeKitty = randomIntFromInterval(25, 50);
+let tapFancyParadeKitty = randomIntFromInterval(25, 60);
 
 function claimFancyParadeKittyAPI() {
-  tapFancyParadeKitty = randomIntFromInterval(25, 50);
+  tapFancyParadeKitty = randomIntFromInterval(25, 60);
 
   const now = new Date();
 
@@ -815,17 +906,35 @@ function claimFancyParadeKittyAPI() {
     fetch(getUrl("/egg/api/den/claim-fancy-parade-kitty"), {
       headers: HEADERS,
       body: JSON.stringify({
-        fancy_parade_kitty_claim_id: `${now.toISOString().split("T")[0]}:${tapFancyParadeKitty}`,
+        fancy_parade_kitty_claim_id: `${
+          now.toISOString().split("T")[0]
+        }:${tapFancyParadeKitty}`,
       }),
       method: "POST",
     })
       .then(async (res) => {
         const payload = await res.json();
-        console.debug("[success] claim fancy parade kitty", payload);
+        if (payload?.error) {
+          console.error("failed to claim fancy parade kitty", payload.error);
+          eventBus.dispatch("error.zen.api", {
+            username: getUser()?.username,
+            error: {
+              msg: payload.error || "unable to claim parade kitty",
+            },
+          });
+        } else {
+          console.debug("[success] claim fancy parade kitty", payload);
+        }
         resolve(payload);
       })
       .catch((error) => {
         console.error("failed to claim fancy parade kitty", error);
+        eventBus.dispatch("error.zen.api", {
+          username: getUser()?.username,
+          error: {
+            msg: error.message || "unable to claim parade kitty",
+          },
+        });
         reject(error);
       });
   });
@@ -849,6 +958,12 @@ function claimZenModeTaoAPI() {
       })
       .catch((error) => {
         console.error("failed to claim zen mode tao", error);
+        eventBus.dispatch("error.zen.api", {
+          username: getUser()?.username,
+          error: {
+            msg: error.message || "unable to claim zen mode tao",
+          },
+        });
         reject(error);
       });
   });
@@ -869,7 +984,13 @@ function upgradeEggAPI(upgradeId) {
         resolve();
       })
       .catch((error) => {
-        console.error("failed to upgrad egg", error);
+        console.error("failed to upgrade egg", error);
+        eventBus.dispatch("error.zen.api", {
+          username: getUser()?.username,
+          error: {
+            msg: error.message || "unable to upgrade egg",
+          },
+        });
         reject(error);
       });
   });

@@ -5,6 +5,7 @@ const ALL_THE_ZEN_BOT_URL = "https://t.me/CKMeowBot/AllTheZen";
 
 async function sendUrgentBigEggNotification(payload) {
   if (!payload?.nextPetTimestamp) {
+    console.warn("[BIG-EGG][URGENT] No next pet timestamp");
     return;
   }
   const now = new Date();
@@ -22,6 +23,7 @@ async function sendUrgentBigEggNotification(payload) {
 
 async function sendAlreadyClaimBigEggNotification(payload) {
   if (!payload?.nextPetTimestamp) {
+    console.warn("[BIG-EGG][ALREADY-CLAIM] No next pet timestamp");
     return;
   }
   const nextPetDate = new Date(payload.nextPetTimestamp);
@@ -40,7 +42,6 @@ async function sendNotification(payload) {
 async function sendTelegramNotification(payload) {
   const url = getTelegramAPIUrl("/sendMessage");
   const groupId = getTelegramGroupId();
-
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -52,8 +53,10 @@ async function sendTelegramNotification(payload) {
       parse_mode: "Markdown",
     }),
   });
-
-  return await res.json();
+  // should not **return await res.json()** when return the response
+  // https://github.com/nodejs/undici/issues/3097
+  const data = await res.json();
+  return data
 }
 
 function getTelegramAPIUrl(path) {
@@ -65,7 +68,7 @@ function getTelegramToken() {
 }
 
 function getTelegramGroupId() {
-  return processEnv("TELEGRAM_GROUP_ID");
+  return processEnv("TELEGRAM_CHAT_ID");
 }
 
 module.exports = {
