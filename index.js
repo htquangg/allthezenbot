@@ -6,6 +6,7 @@ const chalk = require("chalk");
 const { program } = require("commander");
 
 require("./log");
+require("./notification");
 const {
   sleep,
   formarCurrency,
@@ -14,11 +15,6 @@ const {
   processEnv,
 } = require("./utils");
 const packageJson = require("./package.json");
-const {
-  sendNotification,
-  sendUrgentBigEggNotification,
-  sendAlreadyClaimBigEggNotification,
-} = require("./notification");
 const { eventBus } = require("./bus");
 
 program
@@ -59,9 +55,11 @@ const HEADERS = {
 
 const MAX_NUMBER = Number.MAX_SAFE_INTEGER;
 
-const MAX_AGE_SEC = 60;
+const MAX_AGE_FETCH_GAME_INFO_SEC = 60;
 
 const URGENT_NOTIFY_GAME_INFO_NOT_REFRESH_SEC = 180;
+
+const MAX_AGE_NOTIFY_GAME_INFO_SEC = 300;
 
 const URGENT_CLAIM_BIG_EGG_SEC = 300;
 
@@ -70,6 +68,7 @@ const CAT_CATEGORY = {
   PAGES_GANG: "pages_gang",
   FOOTBALLER: "footballer",
   CROSSBREED: "crossbreed",
+  KITTENHEIM: "halloween",
   BAND: "band",
 };
 
@@ -89,7 +88,7 @@ function routeV1(fastify, _, done) {
     }
     const now = new Date();
     const diffSec = (now.getTime() - (lastGameInfo?.getTime() || 0)) / 1000;
-    if (diffSec >= MAX_AGE_SEC) {
+    if (diffSec >= MAX_AGE_FETCH_GAME_INFO_SEC) {
       return responseFailure(reply, null, 500);
     }
     return responseSuccess(reply);
@@ -101,7 +100,7 @@ function routeV1(fastify, _, done) {
     }
     const now = new Date();
     const diffSec = (now.getTime() - (lastGameInfo?.getTime() || 0)) / 1000;
-    if (diffSec >= MAX_AGE_SEC) {
+    if (diffSec >= MAX_AGE_FETCH_GAME_INFO_SEC) {
       return responseFailure(reply, null, 500);
     }
 
@@ -149,70 +148,6 @@ function routeV1(fastify, _, done) {
 
 fastify.register(routeV1, { prefix: "/api/v1" });
 
-eventBus.on("server.started", async function handleEventServerStarted(payload) {
-  const { username } = payload;
-  await sendNotification({
-    message: `*[START] AZenBOT @${username}*`,
-  });
-});
-
-eventBus.on(
-  "error.game_info_not_refreshed",
-  async function handleEventGameInfoNotRefresh(payload) {
-    const { username, lastGameInfo } = payload;
-    await sendNotification({
-      message: `*[ERROR][GAME_INFO_NOT_REFRESH] AZenBOT @${username}*\nLastGameInfo: *${
-        lastGameInfo ? lastGameInfo : "Cann't detect!!!"
-      }*`,
-    });
-  },
-);
-
-eventBus.on(
-  "big_egg.ready_to_claim",
-  async function handleEventBigEggReadyToClaim(payload) {
-    const { username, nextPetTimestamp } = payload;
-    await sendUrgentBigEggNotification({
-      username,
-      nextPetTimestamp,
-    });
-  },
-);
-
-eventBus.on(
-  "big_egg.already_claimed",
-  async function handleEventBigEggAlreadyClaimed(payload) {
-    const { nextPetTimestamp } = payload;
-    await sendAlreadyClaimBigEggNotification({
-      nextPetTimestamp,
-    });
-  },
-);
-
-eventBus.on("error.server", async function handleEventServerError(payload) {
-  const { username, error } = payload;
-  await sendNotification({
-    message: `*[ERROR][SERVER] AZenBOT @${username}*\n${error?.msg}\n${error.stack}`,
-  });
-});
-
-eventBus.on(
-  "error.unhandled_rejection",
-  async function handleEventUnhandledRejection(payload) {
-    const { username, error } = payload;
-    await sendNotification({
-      message: `*[ERROR][UNHANDLED_REJECTION] AZenBOT @${username}*\n${error?.msg}\n${error?.stack}`,
-    });
-  },
-);
-
-eventBus.on("error.zen.api", async function handleErrorZenAPI(payload) {
-  const { username, error } = payload;
-  await sendNotification({
-    message: `*[ERROR][ZEN][API] AZenBOT @${username}*\n${error?.msg}`,
-  });
-});
-
 try {
   fastify.listen({ port: PORT });
 } catch (error) {
@@ -232,6 +167,7 @@ let targetCatCategory = CAT_CATEGORY.BAND;
 let gameInfo = {};
 let lastGameInfo = null;
 let lastGameInfoNotRefresh = null;
+let lastNofifyGameInfo = null;
 
 let stop = false;
 
@@ -246,6 +182,20 @@ let stop = false;
   while (!stop) {
     try {
       await autoFetchInfo();
+
+      if (shouldNotifyGameInfo()) {
+        await eventBus.dispatchAsync("game_info.latest", {
+          username: getUser()?.username,
+          totalPurple: calculateZenPurple(),
+          zpsPurple: getZPSPurle(),
+          totalYellow: calculateZenYellow(),
+          zpsYellow: getZPSYellow(),
+          targetCatCategory,
+          targetCatCategoryPrice: getEggPrice(targetCatCategory),
+          nextPetTimestamp:
+            getNextPetTimestamp() === MAX_NUMBER ? "" : getNextPetTimestamp(),
+        });
+      }
 
       if (shouldNotifyGameInfoNotRefresh()) {
         await eventBus.dispatchAsync("error.game_info_not_refreshed", {
@@ -326,7 +276,7 @@ process.on("unhandledRejection", async (error, promise) => {
 async function autoFetchInfo() {
   const now = new Date();
   const diffSec = (now.getTime() - (lastGameInfo?.getTime() || 0)) / 1000;
-  if (diffSec >= MAX_AGE_SEC) {
+  if (diffSec >= MAX_AGE_FETCH_GAME_INFO_SEC) {
     await fetchInfo();
   }
 }
@@ -344,26 +294,36 @@ function shouldNotifyGameInfoNotRefresh() {
   return should;
 }
 
+function shouldNotifyGameInfo() {
+  const now = new Date();
+  const diffSec = (now.getTime() - (lastNofifyGameInfo?.getTime() || 0)) / 1000;
+  const should = !!(
+    diffSec >= MAX_AGE_NOTIFY_GAME_INFO_SEC &&
+    (now.getTime() - (lastNofifyGameInfo?.getTime() || 0)) / 1000
+  );
+  if (should) {
+    lastNofifyGameInfo = now;
+  }
+  return should;
+}
+
 async function wrapBuyEgg(catCategory) {
-  switch (catCategory) {
-    case CAT_CATEGORY.PAGE:
-      await wrapBuyPageEgg();
-      break;
-    case CAT_CATEGORY.PAGES_GANG:
-      await wrapBuyPagesGangEgg();
-      break;
-    case CAT_CATEGORY.FOOTBALLER:
-      await wrapBuyFootballerEgg();
-      break;
-    case CAT_CATEGORY.CROSSBREED:
-      await wrapBuyCrossbreedEgg();
-      break;
-    case CAT_CATEGORY.BAND:
-      await wrapBuyBandEgg();
-      break;
-    default:
-      await wrapBuyBandEgg();
-      break;
+  let validCatCategory = Object.values(CAT_CATEGORY).find(
+    (v) => v === catCategory,
+  );
+  if (!validCatCategory) {
+    targetCatCategory =
+      CAT_CATEGORY[
+        Object.keys(CAT_CATEGORY)[Object.keys(CAT_CATEGORY).length - 1]
+      ];
+  }
+
+  if (canBuyEgg(targetCatCategory)) {
+    await buyFancyEggAPI(targetCatCategory);
+    await fetchInfo();
+    await sleep(randomIntFromInterval(10 * 1e3, 30 * 1e3));
+    await claimTaoAPI();
+    await fetchInfo();
   }
 }
 
@@ -398,12 +358,6 @@ async function wrapBuyBigEgg() {
   }
 
   await buyBigEggAPI();
-
-  await eventBus.dispatchAsync("big_egg.already_claimed", {
-    nextPetTimestamp:
-      getNextPetTimestamp() === MAX_NUMBER ? null : getNextPetTimestamp(),
-  });
-
   await sleep(randomIntFromInterval(3 * 1e3, 5 * 1e3));
   await claimFancyParadeKittyAPI();
   await sleep(randomIntFromInterval(5 * 1e3, 7 * 1e3));
@@ -411,72 +365,10 @@ async function wrapBuyBigEgg() {
   await sleep(randomIntFromInterval(10 * 1e3, 30 * 1e3));
   await claimTaoAPI();
   await fetchInfo();
-}
-
-async function wrapBuyPageEgg() {
-  if (canBuyPageEgg()) {
-    await buyPageEgg();
-    await sleep(randomIntFromInterval(5 * 1e3, 10 * 1e3));
-    await claimTaoAPI();
-    await fetchInfo();
-  }
-}
-
-async function wrapBuyPagesGangEgg() {
-  if (canBuyPagesGangEgg()) {
-    await buyPagesGangEgg();
-    await sleep(randomIntFromInterval(5 * 1e3, 15 * 1e3));
-    await claimTaoAPI();
-    await fetchInfo();
-  }
-}
-
-async function wrapBuyFootballerEgg() {
-  if (canBuyFootballerEgg()) {
-    await buyFootballerEgg();
-    await sleep(randomIntFromInterval(10 * 1e3, 25 * 1e3));
-    await claimTaoAPI();
-    await fetchInfo();
-  }
-}
-
-async function wrapBuyCrossbreedEgg() {
-  if (canBuyCrossbreedEgg()) {
-    await buyCrossbreedEgg();
-    await sleep(randomIntFromInterval(15 * 1e3, 30 * 1e3));
-    await claimTaoAPI();
-    await fetchInfo();
-  }
-}
-
-async function wrapBuyBandEgg() {
-  if (canBuyBandEgg()) {
-    await buyBandEgg();
-    await fetchInfo();
-    await sleep(randomIntFromInterval(20 * 1e3, 45 * 1e3));
-    await claimTaoAPI();
-    await fetchInfo();
-  }
-}
-
-function canBuyPageEgg() {
-  return canBuyEgg(CAT_CATEGORY.PAGE);
-}
-
-function canBuyPagesGangEgg() {
-  return canBuyEgg(CAT_CATEGORY.PAGES_GANG);
-}
-
-function canBuyFootballerEgg() {
-  return canBuyEgg(CAT_CATEGORY.FOOTBALLER);
-}
-
-function canBuyCrossbreedEgg() {
-  return canBuyEgg(CAT_CATEGORY.CROSSBREED);
-}
-
-function canBuyBandEgg() {
-  return canBuyEgg(CAT_CATEGORY.BAND);
+  await eventBus.dispatchAsync("big_egg.already_claimed", {
+    nextPetTimestamp:
+      getNextPetTimestamp() === MAX_NUMBER ? null : getNextPetTimestamp(),
+  });
 }
 
 function canBuyEgg(catCategory) {
@@ -539,46 +431,6 @@ function canUpgradeEgg() {
   }
 
   return can;
-}
-
-function buyPageEgg() {
-  return buyFancyEggAPI(CAT_CATEGORY.PAGE);
-}
-
-function buyPagesGangEgg() {
-  return buyFancyEggAPI(CAT_CATEGORY.PAGES_GANG);
-}
-
-function buyFootballerEgg() {
-  return buyFancyEggAPI(CAT_CATEGORY.FOOTBALLER);
-}
-
-function buyCrossbreedEgg() {
-  return buyFancyEggAPI(CAT_CATEGORY.CROSSBREED);
-}
-
-function buyBandEgg() {
-  return buyFancyEggAPI(CAT_CATEGORY.BAND);
-}
-
-function getPageEggPrice() {
-  return getEggPrice(CAT_CATEGORY.PAGE);
-}
-
-function getPagesGangEggPrice() {
-  return getEggPrice(CAT_CATEGORY.PAGES_GANG);
-}
-
-function getFootballerEggPrice() {
-  return getEggPrice(CAT_CATEGORY.FOOTBALLER);
-}
-
-function getCrossbreedEggPrice() {
-  return getEggPrice(CAT_CATEGORY.CROSSBREED);
-}
-
-function getBandEggPrice() {
-  return getEggPrice(CAT_CATEGORY.BAND);
 }
 
 function getEggPrice(catCategory) {
@@ -680,58 +532,22 @@ function getZPSYellow() {
   return gameInfo.zen_den?.regenesis_egg_status?.zps || 0;
 }
 
-function catCategoryNumberToString(catCategory) {
-  let targetCatCategory = CAT_CATEGORY.BAND;
-
-  switch (Number(catCategory)) {
-    case 1:
-      targetCatCategory = CAT_CATEGORY.PAGE;
-      break;
-    case 2:
-      targetCatCategory = CAT_CATEGORY.PAGES_GANG;
-      break;
-    case 3:
-      targetCatCategory = CAT_CATEGORY.FOOTBALLER;
-      break;
-    case 4:
-      targetCatCategory = CAT_CATEGORY.CROSSBREED;
-      break;
-    case 5:
-      targetCatCategory = CAT_CATEGORY.BAND;
-      break;
-    default:
-      targetCatCategory = CAT_CATEGORY.BAND;
-      break;
+function catCategoryNumberToString(catCategoryNumber) {
+  catCategoryNumber = Number(catCategoryNumber);
+  const catCategoryValues = Object.values(CAT_CATEGORY);
+  if (catCategoryNumber < 1 || catCategoryNumber > catCategoryValues.length) {
+    return catCategoryValues[catCategoryValues.length - 1];
   }
-
-  return targetCatCategory;
+  return catCategoryValues[catCategoryNumber - 1];
 }
 
 function catCategoryStringToNumber(catCategory) {
-  let targetCatCategory = 5;
-
-  switch (catCategory) {
-    case CAT_CATEGORY.PAGE:
-      targetCatCategory = 1;
-      break;
-    case CAT_CATEGORY.PAGES_GANG:
-      targetCatCategory = 2;
-      break;
-    case CAT_CATEGORY.FOOTBALLER:
-      targetCatCategory = 3;
-      break;
-    case CAT_CATEGORY.CROSSBREED:
-      targetCatCategory = 4;
-      break;
-    case CAT_CATEGORY.BAND:
-      targetCatCategory = 5;
-      break;
-    default:
-      targetCatCategory = 5;
-      break;
+  const catCategoryValues = Object.values(CAT_CATEGORY);
+  const catCategoryIdx = catCategoryValues.findIndex((c) => c === catCategory);
+  if (catCategoryIdx >= 0) {
+    return catCategoryIdx + 1;
   }
-
-  return targetCatCategory;
+  return catCategoryValues.length;
 }
 
 function getUser() {
