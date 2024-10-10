@@ -29,6 +29,10 @@ program
     "--x-id-token <x-id-token>",
     "Specify the AllTheZen token on which server is using for authentication.",
   )
+  .option(
+    "--allow-upgrade-egg",
+    "Specify the AllTheZen token on which server is using for authentication.",
+  )
   .parse(process.argv);
 
 const cmdOpts = program.opts();
@@ -36,6 +40,8 @@ const cmdOpts = program.opts();
 const PORT = cmdOpts.port || processEnv("PORT");
 
 const X_ID_TOKEN = cmdOpts.xIdToken || processEnv("X_ID_TOKEN");
+
+const ALLOW_UPGRADE_EGG = cmdOpts.allowUpgradeEgg;
 
 const API_URL = "https://zenegg-api.production.cryptokitties.dapperlabs.com";
 
@@ -70,6 +76,7 @@ const CAT_CATEGORY = {
   CROSSBREED: "crossbreed",
   KITTENHEIM: "halloween",
   BAND: "band",
+  BANDS_MASCOT: "bands_mascot",
 };
 
 const fastify = Fastify({
@@ -143,6 +150,26 @@ function routeV1(fastify, _, done) {
     });
   });
 
+  fastify.get("/eggs/allow-upgrade", async function handler(request, reply) {
+    if (!Object.keys(gameInfo).length) {
+      return responseFailure(reply, null, 500);
+    }
+    allowUpgradeEgg = true;
+    return responseSuccess(reply, {
+      allowUpgradeEgg,
+    });
+  });
+
+  fastify.get("/eggs/deny-upgrade", async function handler(request, reply) {
+    if (!Object.keys(gameInfo).length) {
+      return responseFailure(reply, null, 500);
+    }
+    allowUpgradeEgg = false;
+    return responseSuccess(reply, {
+      allowUpgradeEgg,
+    });
+  });
+
   done();
 }
 
@@ -165,6 +192,7 @@ try {
 let targetCatCategory = CAT_CATEGORY.BAND;
 
 let gameInfo = {};
+let allowUpgradeEgg = ALLOW_UPGRADE_EGG || false;
 let lastGameInfo = null;
 let lastGameInfoNotRefresh = null;
 let lastNofifyGameInfo = null;
@@ -194,6 +222,7 @@ let stop = false;
           targetCatCategoryPrice: getEggPrice(targetCatCategory),
           nextPetTimestamp:
             getNextPetTimestamp() === MAX_NUMBER ? "" : getNextPetTimestamp(),
+          allowUpgradeEgg,
         });
       }
 
@@ -236,9 +265,12 @@ let stop = false;
       }
 
       await wrapBuyBigEgg();
+
       await wrapUpgradeEgg();
 
       await wrapBuyEgg(targetCatCategory);
+
+      await wrapAckAchievements();
     } catch (error) {
       console.error("unknown error: ", error);
     } finally {
@@ -269,8 +301,8 @@ process.on("unhandledRejection", async (error, promise) => {
     },
   });
   stop = true;
-  fastify?.close();
-  cleanupAndExit(1);
+  // fastify?.close();
+  // cleanupAndExit(1);
 });
 
 async function autoFetchInfo() {
@@ -328,6 +360,10 @@ async function wrapBuyEgg(catCategory) {
 }
 
 async function wrapUpgradeEgg() {
+  if (!allowUpgradeEgg) {
+    return;
+  }
+
   let stopUpgrade = false;
   while (!stopUpgrade) {
     if (!canUpgradeEgg()) {
@@ -369,6 +405,21 @@ async function wrapBuyBigEgg() {
     nextPetTimestamp:
       getNextPetTimestamp() === MAX_NUMBER ? null : getNextPetTimestamp(),
   });
+}
+
+async function wrapAckAchievements() {
+  let stopAchievements = false;
+  while (!stopAchievements) {
+    const achievements = getUnackedAchievements();
+    if (!achievements.length) {
+      stopAchievements = true;
+      continue;
+    }
+    const ids = [achievements[0].id];
+    await ackAchievementsAPI(ids);
+    await fetchInfo();
+    await sleep(randomIntFromInterval(3 * 1e3, 5 * 1e3));
+  }
 }
 
 function canBuyEgg(catCategory) {
@@ -530,6 +581,14 @@ function getZPSYellow() {
   }
 
   return gameInfo.zen_den?.regenesis_egg_status?.zps || 0;
+}
+
+function getUnackedAchievements() {
+  if (!gameInfo) {
+    return [];
+  }
+
+  return gameInfo.zen_den?.unacked_user_achievements || [];
 }
 
 function catCategoryNumberToString(catCategoryNumber) {
@@ -805,6 +864,33 @@ function upgradeEggAPI(upgradeId) {
           username: getUser()?.username,
           error: {
             msg: error.message || "unable to upgrade egg",
+          },
+        });
+        reject(error);
+      });
+  });
+}
+
+function ackAchievementsAPI(ids) {
+  return new Promise((resolve, reject) => {
+    fetch(getUrl("/egg/api/den/achievements/ack"), {
+      headers: HEADERS,
+      body: JSON.stringify({
+        ids,
+      }),
+      method: "POST",
+    })
+      .then(async (res) => {
+        await res.json();
+        console.log("[success] ack achievements");
+        resolve();
+      })
+      .catch((error) => {
+        console.error("failed to ack achievements", error);
+        eventBus.dispatch("error.zen.api", {
+          username: getUser()?.username,
+          error: {
+            msg: error.message || "unable to ack achievements",
           },
         });
         reject(error);

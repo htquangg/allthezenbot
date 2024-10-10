@@ -20,25 +20,26 @@ eventBus.on(
       targetCatCategory,
       targetCatCategoryPrice,
       nextPetTimestamp,
+      allowUpgradeEgg,
     } = payload;
     await sendNotification({
       message: `*[INFO] @${username}*\n-----\n*PURPLE* -- TOTAL *${formarCurrency(
-        totalPurple
+        totalPurple,
       )}* -- ZPS *${formarCurrency(
-        zpsPurple
+        zpsPurple,
       )}*\n*YELLOW* -- TOTAL *${formarCurrency(
-        totalYellow
+        totalYellow,
       )}* -- ZPS *${formarCurrency(
-        zpsYellow
+        zpsYellow,
       )}*\n*CAT_CATEGORY* -- *'${targetCatCategory}'* -- *${formarCurrency(
-        targetCatCategoryPrice
-      )}*\n${
+        targetCatCategoryPrice,
+      )}*\n*ALLOW_UPGRADE_EGG* -- *${allowUpgradeEgg}*\n${
         nextPetTimestamp
           ? `*BIG_EGG* -- *${new Date(nextPetTimestamp).toLocaleString()}*`
           : ""
       }`,
     });
-  }
+  },
 );
 
 eventBus.on(
@@ -50,7 +51,7 @@ eventBus.on(
         lastGameInfo ? lastGameInfo : "Cann't detect!!!"
       }*`,
     });
-  }
+  },
 );
 
 eventBus.on(
@@ -61,7 +62,7 @@ eventBus.on(
       username,
       nextPetTimestamp,
     });
-  }
+  },
 );
 
 eventBus.on(
@@ -71,7 +72,7 @@ eventBus.on(
     await sendAlreadyClaimBigEggNotification({
       nextPetTimestamp,
     });
-  }
+  },
 );
 
 eventBus.on("error.server", async function handleEventServerError(payload) {
@@ -88,7 +89,7 @@ eventBus.on(
     await sendNotification({
       message: `*[ERROR][UNHANDLED_REJECTION] AZenBOT @${username}*\n${error?.msg}\n${error?.stack}`,
     });
-  }
+  },
 );
 
 eventBus.on("error.zen.api", async function handleErrorZenAPI(payload) {
