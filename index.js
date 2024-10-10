@@ -4,6 +4,8 @@ const cookie = require("cookie");
 const Fastify = require("fastify");
 const chalk = require("chalk");
 const { program } = require("commander");
+const fetch = require("node-fetch-native");
+const { createProxy } = require("node-fetch-native/proxy");
 
 require("./log");
 require("./notification");
@@ -26,6 +28,10 @@ program
     "Specify the TCP port on which the server is listening for connections.",
   )
   .option(
+    "--proxy <scheme://user:pass@ip:port>",
+    "Specify the proxy url on which the server is using for connections.",
+  )
+  .option(
     "--x-id-token <x-id-token>",
     "Specify the AllTheZen token on which server is using for authentication.",
   )
@@ -38,6 +44,8 @@ program
 const cmdOpts = program.opts();
 
 const PORT = cmdOpts.port || processEnv("PORT");
+
+const PROXY_URL = cmdOpts.proxy || processEnv("PROXY");
 
 const X_ID_TOKEN = cmdOpts.xIdToken || processEnv("X_ID_TOKEN");
 
@@ -78,6 +86,10 @@ const CAT_CATEGORY = {
   BAND: "band",
   BANDS_MASCOT: "bands_mascot",
 };
+
+const proxy = createProxy({
+  url: PROXY_URL,
+});
 
 const fastify = Fastify({
   logger: true,
@@ -652,7 +664,7 @@ function getUrl(path) {
 
 function fetchInfo() {
   return new Promise((resolve, reject) => {
-    fetch(getUrl("/egg/api/den"), {
+    matchRequest(getUrl("/egg/api/den"), {
       headers: HEADERS,
       body: null,
       method: "GET",
@@ -682,7 +694,7 @@ function fetchInfo() {
 
 function buyFancyEggAPI(catCategory) {
   return new Promise((resolve, reject) => {
-    fetch(getUrl("/egg/api/den/buy-fancy-egg"), {
+    matchRequest(getUrl("/egg/api/den/buy-fancy-egg"), {
       headers: HEADERS,
       body: JSON.stringify({
         cat_category: catCategory,
@@ -714,7 +726,7 @@ function buyFancyEggAPI(catCategory) {
 
 function buyBigEggAPI() {
   return new Promise((resolve, reject) => {
-    fetch(getUrl("/egg/api/den/gently-stroke-the-regenesis-egg"), {
+    matchRequest(getUrl("/egg/api/den/gently-stroke-the-regenesis-egg"), {
       headers: HEADERS,
       body: null,
       method: "POST",
@@ -745,7 +757,7 @@ function buyBigEggAPI() {
 
 function claimTaoAPI() {
   return new Promise((resolve, reject) => {
-    fetch(getUrl("/egg/api/den/claim-tao"), {
+    matchRequest(getUrl("/egg/api/den/claim-tao"), {
       headers: HEADERS,
       body: null,
       method: "POST",
@@ -770,6 +782,13 @@ function claimTaoAPI() {
   });
 }
 
+async function matchRequest(url, options) {
+  return fetch(url, {
+    ...options,
+    ...proxy,
+  });
+}
+
 let tapFancyParadeKitty = randomIntFromInterval(25, 60);
 
 function claimFancyParadeKittyAPI() {
@@ -778,7 +797,7 @@ function claimFancyParadeKittyAPI() {
   const now = new Date();
 
   return new Promise((resolve, reject) => {
-    fetch(getUrl("/egg/api/den/claim-fancy-parade-kitty"), {
+    matchRequest(getUrl("/egg/api/den/claim-fancy-parade-kitty"), {
       headers: HEADERS,
       body: JSON.stringify({
         fancy_parade_kitty_claim_id: `${
@@ -817,7 +836,7 @@ function claimFancyParadeKittyAPI() {
 
 function claimZenModeTaoAPI() {
   return new Promise((resolve, reject) => {
-    fetch(getUrl("/egg/api/den/claim-zen-mode-tao"), {
+    matchRequest(getUrl("/egg/api/den/claim-zen-mode-tao"), {
       headers: HEADERS,
       body: JSON.stringify({
         taps: tapFancyParadeKitty * 2,
@@ -846,7 +865,7 @@ function claimZenModeTaoAPI() {
 
 function upgradeEggAPI(upgradeId) {
   return new Promise((resolve, reject) => {
-    fetch(getUrl("/egg/api/den/upgrades/buy"), {
+    matchRequest(getUrl("/egg/api/den/upgrades/buy"), {
       headers: HEADERS,
       body: JSON.stringify({
         upgrade_id: upgradeId,
@@ -873,7 +892,7 @@ function upgradeEggAPI(upgradeId) {
 
 function ackAchievementsAPI(ids) {
   return new Promise((resolve, reject) => {
-    fetch(getUrl("/egg/api/den/achievements/ack"), {
+    matchRequest(getUrl("/egg/api/den/achievements/ack"), {
       headers: HEADERS,
       body: JSON.stringify({
         ids,
