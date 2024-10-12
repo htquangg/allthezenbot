@@ -25,19 +25,19 @@ program
   .version(packageJson.version)
   .option(
     "-p, --port <port>",
-    "Specify the TCP port on which the server is listening for connections.",
+    "Specify the TCP port on which the server is listening for connections."
   )
   .option(
     "--proxy <scheme://user:pass@ip:port>",
-    "Specify the proxy url on which the server is using for connections.",
+    "Specify the proxy url on which the server is using for connections."
   )
   .option(
     "--x-id-token <x-id-token>",
-    "Specify the AllTheZen token on which server is using for authentication.",
+    "Specify the AllTheZen token on which server is using for authentication."
   )
   .option(
     "--allow-upgrade-egg",
-    "Specify the AllTheZen token on which server is using for authentication.",
+    "Specify the upgrade status on which server is using for auto upgrade egg."
   )
   .parse(process.argv);
 
@@ -57,9 +57,6 @@ const HEADERS = {
   accept: "*/*",
   "accept-language": "en-US,en;q=0.9",
   "content-type": "application/json",
-  "sec-ch-ua": '"Chromium";v="129", "Not=A?Brand";v="8"',
-  "sec-ch-ua-mobile": "?1",
-  "sec-ch-ua-platform": '"Android"',
   "sec-fetch-dest": "empty",
   "sec-fetch-mode": "cors",
   "sec-fetch-site": "same-site",
@@ -215,9 +212,9 @@ let stop = false;
   await eventBus.dispatchAsync("server.started", {
     username: getUser()?.username,
   });
-  try {
-    await claimTaoAPI();
-  } catch (error) {}
+  // try {
+  //   await claimTaoAPI();
+  // } catch (error) {}
 
   await checkProxyIP();
 
@@ -249,28 +246,28 @@ let stop = false;
 
       console.debug("--------------------------------------------------");
       console.log(
-        `>>> username: ${chalk.bold.yellow(getUser()?.username)} <<<`,
+        `>>> username: ${chalk.bold.yellow(getUser()?.username)} <<<`
       );
       console.log(
         `${chalk.bold.bgHex("#A45DF0")(
-          "[PURPLE]",
+          "[PURPLE]"
         )} ZEN -- [TOTAL] ${chalk.bold.green(
-          formarCurrency(calculateZenPurple()),
-        )} -- [ZPS] ${chalk.bold.green(formarCurrency(getZPSPurle()))}`,
+          formarCurrency(calculateZenPurple())
+        )} -- [ZPS] ${chalk.bold.green(formarCurrency(getZPSPurle()))}`
       );
       console.log(
         `${chalk.bold.bgHex("#D9ED24")(
-          "[YELLOW]",
+          "[YELLOW]"
         )} ZEN -- [TOTAL] ${chalk.bold.green(
-          formarCurrency(calculateZenYellow()),
-        )} -- [ZPS] ${chalk.bold.green(formarCurrency(getZPSYellow()))}`,
+          formarCurrency(calculateZenYellow())
+        )} -- [ZPS] ${chalk.bold.green(formarCurrency(getZPSYellow()))}`
       );
       const eggs = getEggsPrice();
       eggs.map((egg) => {
         console.debug(
           `id ${chalk.red(egg.internal_id)} -- egg '${chalk.red(
-            egg.cat_category,
-          )}' -- price ${chalk.red(formarCurrency(egg.current_price))}`,
+            egg.cat_category
+          )}' -- price ${chalk.red(formarCurrency(egg.current_price))}`
         );
       });
 
@@ -355,7 +352,7 @@ function shouldNotifyGameInfo() {
 
 async function wrapBuyEgg(catCategory) {
   let validCatCategory = Object.values(CAT_CATEGORY).find(
-    (v) => v === catCategory,
+    (v) => v === catCategory
   );
   if (!validCatCategory) {
     targetCatCategory =
@@ -447,8 +444,8 @@ function canBuyEgg(catCategory) {
   if (!can) {
     console.debug(
       `unable to ${chalk.bold.red("buy")} egg -- name '${chalk.red(
-        catCategory,
-      )}' -- price: ${chalk.red(formarCurrency(priceEgg))}`,
+        catCategory
+      )}' -- price: ${chalk.red(formarCurrency(priceEgg))}`
     );
   }
 
@@ -466,10 +463,10 @@ function canBuyBigEgg() {
     const nextPetDate = new Date(getNextPetTimestamp());
     console.debug(
       `${chalk.bold.red(
-        "[BIG-EGG]",
+        "[BIG-EGG]"
       )} next time to claim big egg: ${chalk.bold.red(
-        nextPetDate.toISOString(),
-      )}`,
+        nextPetDate.toISOString()
+      )}`
     );
   }
 
@@ -490,8 +487,8 @@ function canUpgradeEgg() {
   if (!can) {
     console.debug(
       `unable to ${chalk.bold.red("upgrade")} egg -- name '${chalk.red(
-        getFirstUpgrade()?.name,
-      )}' -- price ${chalk.red(formarCurrency(getFirstUpgrade()?.price))}`,
+        getFirstUpgrade()?.name
+      )}' -- price ${chalk.red(formarCurrency(getFirstUpgrade()?.price))}`
     );
   }
 
@@ -629,7 +626,7 @@ function getUser() {
   let jsonCookies = null;
   try {
     jsonCookies = JSON.parse(
-      cookies?.user?.substring(0, cookies?.user?.indexOf("&chat_instance")),
+      cookies?.user?.substring(0, cookies?.user?.indexOf("&chat_instance"))
     );
   } catch (error) {
     console.error("failed to extract user info: ", error);
@@ -672,12 +669,12 @@ function fetchInfo() {
       method: "GET",
     })
       .then(async (res) => {
-        await getFelisMessages();
         const payload = await res.json();
         if (payload?.error) {
           resolve({});
           return;
         }
+        await getFelisMessages();
         gameInfo = payload;
         lastGameInfo = new Date();
         resolve(payload);
@@ -766,7 +763,7 @@ function buyFancyEggAPI(catCategory) {
         console.log(
           "[success] buy fancy egg: ",
           catCategory,
-          formarCurrency(payload?.zen_den?.zen_status?.zen_count),
+          formarCurrency(payload?.zen_den?.zen_status?.zen_count)
         );
         resolve(payload);
       })
@@ -795,8 +792,8 @@ function buyBigEggAPI() {
         if (payload?.regenesis_egg_status) {
           console.log(
             `[success] buy big egg -- next-pet-timestamp ${new Date(
-              payload.regenesis_egg_status?.next_pet_timestamp,
-            ).toISOString()}`,
+              payload.regenesis_egg_status?.next_pet_timestamp
+            ).toISOString()}`
           );
         }
         resolve(payload);

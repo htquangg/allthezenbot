@@ -1,12 +1,26 @@
+const cookie = require("cookie");
+
 const { processEnv, convertSecondsToHIS, formarCurrency } = require("./utils");
 const { eventBus } = require("./bus");
 
-eventBus.on("server.started", async function handleEventServerStarted(payload) {
-  const { username } = payload;
-  await sendNotification({
-    message: `*[START] AZenBOT @${username}*`,
-  });
-});
+eventBus.on(
+  "server.started",
+  async function handleEventServerStarted(_payload) {
+    await sendNotification({
+      message: `*[START]* server started`,
+    });
+  },
+);
+
+eventBus.on(
+  "error.api.fetched_game_info",
+  async function handleEventFetchedGameInfoError(payload) {
+    const { token, error } = payload;
+    await sendNotification({
+      message: `*[ERROR][API][FETCHED_GAME_INFO] @${getUserFromToken(token)?.username || ""}*\n${error?.msg}`,
+    });
+  },
+);
 
 eventBus.on(
   "game_info.latest",
@@ -68,8 +82,9 @@ eventBus.on(
 eventBus.on(
   "big_egg.already_claimed",
   async function handleEventBigEggAlreadyClaimed(payload) {
-    const { nextPetTimestamp } = payload;
+    const { username, nextPetTimestamp } = payload;
     await sendAlreadyClaimBigEggNotification({
+      username,
       nextPetTimestamp,
     });
   },
@@ -168,6 +183,19 @@ function getTelegramToken() {
 
 function getTelegramGroupId() {
   return processEnv("TELEGRAM_CHAT_ID");
+}
+
+function getUserFromToken(token) {
+  const cookies = cookie.parse(token);
+  let jsonCookies = {};
+  try {
+    jsonCookies = JSON.parse(
+      cookies?.user?.substring(0, cookies?.user?.indexOf("&chat_instance")),
+    );
+  } catch (error) {
+    console.error("failed to extract user info: ", error);
+  }
+  return jsonCookies;
 }
 
 module.exports = {
