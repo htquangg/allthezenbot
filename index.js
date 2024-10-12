@@ -723,6 +723,34 @@ function getFelisMessages() {
   });
 }
 
+function getFelisMessages() {
+  return new Promise((resolve, reject) => {
+    matchRequest(getUrl("/egg/api/den/felis-messages"), {
+      headers: HEADERS,
+      body: null,
+      method: "GET",
+    })
+      .then(async (res) => {
+        const payload = await res.json();
+        if (payload?.error) {
+          resolve({});
+          return;
+        }
+        resolve(payload);
+      })
+      .catch((error) => {
+        console.error("failed to get felis messages", error);
+        eventBus.dispatch("error.zen.api", {
+          username: getUser()?.username,
+          error: {
+            msg: error.message || "unable to fetch game info",
+          },
+        });
+        reject(error);
+      });
+  });
+}
+
 function buyFancyEggAPI(catCategory) {
   return new Promise((resolve, reject) => {
     matchRequest(getUrl("/egg/api/den/buy-fancy-egg"), {
