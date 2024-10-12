@@ -219,6 +219,8 @@ let stop = false;
     await claimTaoAPI();
   } catch (error) {}
 
+  await checkProxyIP();
+
   while (!stop) {
     try {
       await autoFetchInfo();
@@ -241,7 +243,7 @@ let stop = false;
       if (shouldNotifyGameInfoNotRefresh()) {
         await eventBus.dispatchAsync("error.game_info_not_refreshed", {
           username: getUser()?.username,
-          lastGameInfo: lastGameInfo?.toLocaleString() || null,
+          lastGameInfo: lastGameInfo?.toISOString() || null,
         });
       }
 
@@ -410,7 +412,7 @@ async function wrapBuyBigEgg() {
   await claimFancyParadeKittyAPI();
   await sleep(randomIntFromInterval(5 * 1e3, 7 * 1e3));
   await claimZenModeTaoAPI();
-  await sleep(randomIntFromInterval(10 * 1e3, 30 * 1e3));
+  await sleep(randomIntFromInterval(10 * 1e3, 20 * 1e3));
   await claimTaoAPI();
   await fetchInfo();
   await eventBus.dispatchAsync("big_egg.already_claimed", {
@@ -466,7 +468,7 @@ function canBuyBigEgg() {
       `${chalk.bold.red(
         "[BIG-EGG]",
       )} next time to claim big egg: ${chalk.bold.red(
-        nextPetDate.toLocaleString(),
+        nextPetDate.toISOString(),
       )}`,
     );
   }
@@ -737,7 +739,7 @@ function buyBigEggAPI() {
           console.log(
             `[success] buy big egg -- next-pet-timestamp ${new Date(
               payload.regenesis_egg_status?.next_pet_timestamp,
-            ).toLocaleString()}`,
+            ).toISOString()}`,
           );
         }
         resolve(payload);
@@ -777,6 +779,25 @@ function claimTaoAPI() {
             msg: error.message || "unable to claim tao",
           },
         });
+        reject(error);
+      });
+  });
+}
+
+async function checkProxyIP() {
+  return new Promise((resolve, reject) => {
+    matchRequest("https://api.ipify.org?format=json", {
+      headers: HEADERS,
+      body: null,
+      method: "GET",
+    })
+      .then(async (res) => {
+        const payload = await res.json();
+        console.log("[success] Your proxy ip: ", payload.ip);
+        resolve(payload);
+      })
+      .catch((error) => {
+        console.error("failed to get proxy ip", error);
         reject(error);
       });
   });
