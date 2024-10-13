@@ -1,6 +1,6 @@
 const cookie = require("cookie");
 
-const { processEnv, convertSecondsToHIS, formarCurrency } = require("./utils");
+const { processEnv, convertSecondsToHIS, formatCurrency } = require("./utils");
 const { eventBus } = require("./bus");
 
 eventBus.on(
@@ -37,15 +37,15 @@ eventBus.on(
       allowUpgradeEgg,
     } = payload;
     await sendNotification({
-      message: `*[INFO] @${username}*\n-----\n*PURPLE* -- TOTAL *${formarCurrency(
+      message: `*[INFO] @${username}*\n-----\n*PURPLE* -- TOTAL *${formatCurrency(
         totalPurple,
-      )}* -- ZPS *${formarCurrency(
+      )}* -- ZPS *${formatCurrency(
         zpsPurple,
-      )}*\n*YELLOW* -- TOTAL *${formarCurrency(
+      )}*\n*YELLOW* -- TOTAL *${formatCurrency(
         totalYellow,
-      )}* -- ZPS *${formarCurrency(
+      )}* -- ZPS *${formatCurrency(
         zpsYellow,
-      )}*\n*CAT_CATEGORY* -- *'${targetCatCategory}'* -- *${formarCurrency(
+      )}*\n*CAT_CATEGORY* -- *'${targetCatCategory}'* -- *${formatCurrency(
         targetCatCategoryPrice,
       )}*\n*ALLOW_UPGRADE_EGG* -- *${allowUpgradeEgg}*\n${
         nextPetTimestamp

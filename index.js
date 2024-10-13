@@ -11,7 +11,7 @@ require("./log");
 require("./notification");
 const {
   sleep,
-  formarCurrency,
+  formatCurrency,
   cleanupAndExit,
   randomIntFromInterval,
   processEnv,
@@ -131,18 +131,18 @@ function routeV1(fastify, _, done) {
       target_cat_category: targetCatCategory,
       zen: {
         purple: {
-          total: formarCurrency(calculateZenPurple()),
-          zps: formarCurrency(getZPSPurle()),
+          total: formatCurrency(calculateZenPurple()),
+          zps: formatCurrency(getZPSPurle()),
         },
         yellow: {
-          total: formarCurrency(calculateZenYellow()),
-          zps: formarCurrency(getZPSYellow()),
+          total: formatCurrency(calculateZenYellow()),
+          zps: formatCurrency(getZPSYellow()),
         },
       },
       eggs: getEggsPrice()?.map((egg) => {
         return {
           ...egg,
-          current_price: formarCurrency(egg.current_price),
+          current_price: formatCurrency(egg.current_price),
         };
       }),
     });
@@ -252,22 +252,22 @@ let stop = false;
         `${chalk.bold.bgHex("#A45DF0")(
           "[PURPLE]"
         )} ZEN -- [TOTAL] ${chalk.bold.green(
-          formarCurrency(calculateZenPurple())
-        )} -- [ZPS] ${chalk.bold.green(formarCurrency(getZPSPurle()))}`
+          formatCurrency(calculateZenPurple())
+        )} -- [ZPS] ${chalk.bold.green(formatCurrency(getZPSPurle()))}`
       );
       console.log(
         `${chalk.bold.bgHex("#D9ED24")(
           "[YELLOW]"
         )} ZEN -- [TOTAL] ${chalk.bold.green(
-          formarCurrency(calculateZenYellow())
-        )} -- [ZPS] ${chalk.bold.green(formarCurrency(getZPSYellow()))}`
+          formatCurrency(calculateZenYellow())
+        )} -- [ZPS] ${chalk.bold.green(formatCurrency(getZPSYellow()))}`
       );
       const eggs = getEggsPrice();
       eggs.map((egg) => {
         console.debug(
           `id ${chalk.red(egg.internal_id)} -- egg '${chalk.red(
             egg.cat_category
-          )}' -- price ${chalk.red(formarCurrency(egg.current_price))}`
+          )}' -- price ${chalk.red(formatCurrency(egg.current_price))}`
         );
       });
 
@@ -445,7 +445,7 @@ function canBuyEgg(catCategory) {
     console.debug(
       `unable to ${chalk.bold.red("buy")} egg -- name '${chalk.red(
         catCategory
-      )}' -- price: ${chalk.red(formarCurrency(priceEgg))}`
+      )}' -- price: ${chalk.red(formatCurrency(priceEgg))}`
     );
   }
 
@@ -488,7 +488,7 @@ function canUpgradeEgg() {
     console.debug(
       `unable to ${chalk.bold.red("upgrade")} egg -- name '${chalk.red(
         getFirstUpgrade()?.name
-      )}' -- price ${chalk.red(formarCurrency(getFirstUpgrade()?.price))}`
+      )}' -- price ${chalk.red(formatCurrency(getFirstUpgrade()?.price))}`
     );
   }
 
@@ -763,7 +763,7 @@ function buyFancyEggAPI(catCategory) {
         console.log(
           "[success] buy fancy egg: ",
           catCategory,
-          formarCurrency(payload?.zen_den?.zen_status?.zen_count)
+          formatCurrency(payload?.zen_den?.zen_status?.zen_count)
         );
         resolve(payload);
       })

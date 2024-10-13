@@ -11,7 +11,7 @@ function sleep(ms) {
   });
 }
 
-function formarCurrency(labelValue) {
+function formatCurrency(labelValue) {
   return Math.abs(Number(labelValue)) >= 1.0e24
     ? (Math.abs(Number(labelValue)) / 1.0e24).toFixed(3) + "Y"
     : Math.abs(Number(labelValue)) >= 1.0e21
@@ -79,7 +79,7 @@ function processEnv(key) {
 
 module.exports = {
   sleep,
-  formarCurrency,
+  formatCurrency,
   randomIntFromInterval,
   getDate,
   cleanupAndExit,

@@ -14,7 +14,7 @@ require("./notification");
 const packageJson = require("./package.json");
 const {
   sleep,
-  formarCurrency,
+  formatCurrency,
   cleanupAndExit,
   randomIntFromInterval,
   processEnv,
@@ -87,6 +87,14 @@ class AllTheZenBot {
   }
 
   data() {
+    for (const familyId in this.#data) {
+      this.#data[familyId].totalPurple = this.#calculateZenPurple(familyId);
+      this.#data[familyId].zpsPurple = this.#getZPSPurle(familyId);
+      this.#data[familyId].totalYellow = this.#calculateZenYellow(familyId);
+      this.#data[familyId].zpsYellow = this.#getZPSYellow(familyId);
+      this.#data[familyId].nextPetTimestamp =
+        this.#getNextPetTimestamp(familyId);
+    }
     return this.#data;
   }
 
@@ -207,9 +215,9 @@ class AllTheZenBot {
             `${chalk.bold.bgHex("#A45DF0")(
               "[PURPLE]",
             )} ZEN -- [TOTAL] ${chalk.bold.green(
-              formarCurrency(this.#calculateZenPurple(familyId)),
+              formatCurrency(this.#calculateZenPurple(familyId)),
             )} -- [ZPS] ${chalk.bold.green(
-              formarCurrency(this.#getZPSPurle(familyId)),
+              formatCurrency(this.#getZPSPurle(familyId)),
             )}`,
           );
           this.#logInfo(
@@ -217,9 +225,9 @@ class AllTheZenBot {
             `${chalk.bold.bgHex("#D9ED24")(
               "[YELLOW]",
             )} ZEN -- [TOTAL] ${chalk.bold.green(
-              formarCurrency(this.#calculateZenYellow(familyId)),
+              formatCurrency(this.#calculateZenYellow(familyId)),
             )} -- [ZPS] ${chalk.bold.green(
-              formarCurrency(this.#getZPSYellow(familyId)),
+              formatCurrency(this.#getZPSYellow(familyId)),
             )}`,
           );
           const eggs = this.#getEggs(familyId);
@@ -228,7 +236,7 @@ class AllTheZenBot {
               familyId,
               `id ${chalk.red(idx + 1)} -- egg '${chalk.red(
                 egg.cat_category,
-              )}' -- price ${chalk.red(formarCurrency(egg.current_price))}`,
+              )}' -- price ${chalk.red(formatCurrency(egg.current_price))}`,
             );
           });
 
@@ -267,10 +275,8 @@ class AllTheZenBot {
       return;
     }
 
-    await this.#claimFancyParadeKittyAPI(
-      this.#getUserToken(familyId),
-      this.#getUserProxy(familyId),
-    );
+    await this.#claimParadeKitties(familyId);
+
     await sleep(randomIntFromInterval(3 * 1e3, 10 * 1e3));
     await this.#buyBigEggAPI(
       this.#getUserToken(familyId),
@@ -404,7 +410,7 @@ class AllTheZenBot {
         `unable to buy egg ${chalk.bold.red(
           this.#getTargetEgg(familyId)?.cat_category,
         )} -- price ${chalk.bold.red(
-          formarCurrency(this.#getTargetEggPrice(familyId)),
+          formatCurrency(this.#getTargetEggPrice(familyId)),
         )}`,
       );
     }
@@ -439,6 +445,40 @@ class AllTheZenBot {
     return game?.zen_den?.egg_shop || [];
   }
 
+  async #claimParadeKitties(familyId) {
+    await this.#refreshGameInfo(familyId, true);
+
+    let stop = false;
+
+    while (!stop) {
+      const paradeKitties = this.#getParadeKitties(familyId);
+      if (!paradeKitties.length) {
+        stop = true;
+        continue;
+      }
+
+      for (let kitty of paradeKitties) {
+        await this.#claimFancyParadeKittyAPI(
+          this.#getUserToken(familyId),
+          this.#getUserProxy(familyId),
+          kitty?.id,
+        );
+        await sleep(randomIntFromInterval(3 * 1e3, 5 * 1e3));
+      }
+
+      await this.#refreshGameInfo(familyId, true);
+    }
+  }
+
+  #getParadeKitties(familyId) {
+    const game = this.#getUserGame(familyId);
+    if (!game || !Object.keys(game).length) {
+      return [];
+    }
+
+    return game.zen_den?.claimable_fancy_parade_kitties || [];
+  }
+
   #canUpgradeEgg(familyId) {
     const game = this.#getUserGame(familyId);
     if (!game || !Object.keys(game).length) {
@@ -457,7 +497,7 @@ class AllTheZenBot {
         `unable to ${chalk.bold.red("upgrade")} egg -- name '${chalk.red(
           this.#getFirstUpgrade(familyId)?.name,
         )}' -- price ${chalk.red(
-          formarCurrency(this.#getFirstUpgrade(familyId)?.price),
+          formatCurrency(this.#getFirstUpgrade(familyId)?.price),
         )}`,
       );
     }
@@ -652,7 +692,6 @@ class AllTheZenBot {
         };
         this.#setUserAccount(familyId);
       }
-      return;
     }
   }
 
@@ -767,18 +806,11 @@ class AllTheZenBot {
     return result;
   }
 
-  #tapFancyParadeKitty = randomIntFromInterval(25, 60);
-
-  async #claimFancyParadeKittyAPI(token, proxy) {
-    this.#tapFancyParadeKitty = randomIntFromInterval(25, 60);
-
-    const now = new Date();
+  async #claimFancyParadeKittyAPI(token, proxy, id) {
     const result = await this.#post(
       this.#getGameUrl("/egg/api/den/claim-fancy-parade-kitty"),
       {
-        fancy_parade_kitty_claim_id: `${now.toISOString().split("T")[0]}:${
-          this.#tapFancyParadeKitty
-        }`,
+        fancy_parade_kitty_claim_id: id,
       },
       this.#getHeaderToken(token),
       proxy,
@@ -799,10 +831,12 @@ class AllTheZenBot {
   }
 
   async #claimZenModeTaoAPI(token, proxy) {
+    const taps = randomIntFromInterval(25, 60);
+
     const result = await this.#post(
       this.#getGameUrl("/egg/api/den/claim-zen-mode-tao"),
       {
-        taps: this.#tapFancyParadeKitty * 2,
+        taps,
       },
       this.#getHeaderToken(token),
       proxy,
@@ -1043,6 +1077,12 @@ function routeV1(fastify, _, done) {
   fastify.put("/clients/proxy", async function handler(request, reply) {
     const { familyId, proxy } = request.body;
     await bot.updateProxyClient(familyId, proxy);
+    return responseSuccess(reply);
+  });
+
+  fastify.put("/clients/token", async function handler(request, reply) {
+    const { familyId, token } = request.body;
+    await bot.updateTokenClient(familyId, token);
     return responseSuccess(reply);
   });
 
