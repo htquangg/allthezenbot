@@ -27,11 +27,11 @@ program
   .version(packageJson.version)
   .option(
     "-p, --port <port>",
-    "Specify the TCP port on which the server is listening for connections."
+    "Specify the TCP port on which the server is listening for connections.",
   )
   .option(
     "--ignore-proxy",
-    "Specify the proxy status on which server is using for connections."
+    "Specify the proxy status on which server is using for connections.",
   )
   .parse(process.argv);
 
@@ -148,7 +148,7 @@ class AllTheZenBot {
     const response = await this.#get(
       "https://api.ipify.org?format=json",
       {},
-      proxy
+      proxy,
     );
     if (!response.success) {
       throw new Error(`Cann't check IP proxy. Status code: ${response.error}`);
@@ -197,38 +197,38 @@ class AllTheZenBot {
 
           console.log(
             `========== Account ${chalk.green(familyId)} | ${chalk.green(
-              this.#getUserAccount(familyId)?.username
+              this.#getUserAccount(familyId)?.username,
             )} | ${chalk.green(
-              this.#getUserAccount(familyId)?.id
-            )} | ip: ${chalk.green(proxyIP)} ==========`
+              this.#getUserAccount(familyId)?.id,
+            )} | ip: ${chalk.green(proxyIP)} ==========`,
           );
           this.#logInfo(
             familyId,
             `${chalk.bold.bgHex("#A45DF0")(
-              "[PURPLE]"
+              "[PURPLE]",
             )} ZEN -- [TOTAL] ${chalk.bold.green(
-              formarCurrency(this.#calculateZenPurple(familyId))
+              formarCurrency(this.#calculateZenPurple(familyId)),
             )} -- [ZPS] ${chalk.bold.green(
-              formarCurrency(this.#getZPSPurle(familyId))
-            )}`
+              formarCurrency(this.#getZPSPurle(familyId)),
+            )}`,
           );
           this.#logInfo(
             familyId,
             `${chalk.bold.bgHex("#D9ED24")(
-              "[YELLOW]"
+              "[YELLOW]",
             )} ZEN -- [TOTAL] ${chalk.bold.green(
-              formarCurrency(this.#calculateZenYellow(familyId))
+              formarCurrency(this.#calculateZenYellow(familyId)),
             )} -- [ZPS] ${chalk.bold.green(
-              formarCurrency(this.#getZPSYellow(familyId))
-            )}`
+              formarCurrency(this.#getZPSYellow(familyId)),
+            )}`,
           );
           const eggs = this.#getEggs(familyId);
           eggs.map((egg, idx) => {
             this.#logDebug(
               familyId,
               `id ${chalk.red(idx + 1)} -- egg '${chalk.red(
-                egg.cat_category
-              )}' -- price ${chalk.red(formarCurrency(egg.current_price))}`
+                egg.cat_category,
+              )}' -- price ${chalk.red(formarCurrency(egg.current_price))}`,
             );
           });
 
@@ -269,22 +269,22 @@ class AllTheZenBot {
 
     await this.#claimFancyParadeKittyAPI(
       this.#getUserToken(familyId),
-      this.#getUserProxy(familyId)
+      this.#getUserProxy(familyId),
     );
     await sleep(randomIntFromInterval(3 * 1e3, 10 * 1e3));
     await this.#buyBigEggAPI(
       this.#getUserToken(familyId),
-      this.#getUserProxy(familyId)
+      this.#getUserProxy(familyId),
     );
     await sleep(randomIntFromInterval(3 * 1e3, 5 * 1e3));
     await this.#claimZenModeTaoAPI(
       this.#getUserToken(familyId),
-      this.#getUserProxy(familyId)
+      this.#getUserProxy(familyId),
     );
     await sleep(randomIntFromInterval(10 * 1e3, 20 * 1e3));
     await this.#claimTaoAPI(
       this.#getUserToken(familyId),
-      this.#getUserProxy(familyId)
+      this.#getUserProxy(familyId),
     );
     await this.#refreshGameInfo(familyId, true);
     await eventBus.dispatchAsync("big_egg.already_claimed", {
@@ -305,12 +305,12 @@ class AllTheZenBot {
       await this.#buyFancyEggAPI(
         this.#getUserToken(familyId),
         this.#getUserProxy(familyId),
-        this.#getTargetEgg(familyId)?.cat_category
+        this.#getTargetEgg(familyId)?.cat_category,
       );
       await sleep(randomIntFromInterval(10 * 1e3, 30 * 1e3));
       await this.#claimTaoAPI(
         this.#getUserToken(familyId),
-        this.#getUserProxy(familyId)
+        this.#getUserProxy(familyId),
       );
       await this.#refreshGameInfo(familyId, true);
     }
@@ -334,7 +334,7 @@ class AllTheZenBot {
       await this.#ackAchievementsAPI(
         this.#getUserToken(familyId),
         this.#getUserProxy(familyId),
-        ids
+        ids,
       );
       await this.#refreshGameInfo(familyId, true);
       await sleep(randomIntFromInterval(3 * 1e3, 5 * 1e3));
@@ -355,12 +355,12 @@ class AllTheZenBot {
       await this.#upgradeEggAPI(
         this.#getUserToken(familyId),
         this.#getUserProxy(familyId),
-        this.#getFirstUpgrade(familyId)?.id
+        this.#getFirstUpgrade(familyId)?.id,
       );
       await sleep(randomIntFromInterval(5 * 1e3, 10 * 1e3));
       await this.#claimTaoAPI(
         this.#getUserProxy(familyId),
-        this.#getUserToken(familyId)
+        this.#getUserToken(familyId),
       );
       await this.#refreshGameInfo(familyId, true);
     }
@@ -380,10 +380,10 @@ class AllTheZenBot {
       this.#logDebug(
         familyId,
         `${chalk.bold.red(
-          "[BIG-EGG]"
+          "[BIG-EGG]",
         )} next time to claim big egg: ${chalk.bold.red(
-          nextPetDate.toISOString()
-        )}`
+          nextPetDate.toISOString(),
+        )}`,
       );
     }
 
@@ -402,10 +402,10 @@ class AllTheZenBot {
       this.#logDebug(
         familyId,
         `unable to buy egg ${chalk.bold.red(
-          this.#getTargetEgg(familyId)?.cat_category
+          this.#getTargetEgg(familyId)?.cat_category,
         )} -- price ${chalk.bold.red(
-          formarCurrency(this.#getTargetEggPrice(familyId))
-        )}`
+          formarCurrency(this.#getTargetEggPrice(familyId)),
+        )}`,
       );
     }
     return can;
@@ -423,7 +423,7 @@ class AllTheZenBot {
   #getTargetEgg(familyId) {
     const eggShop = this.#getEggs(familyId);
     const egg = eggShop.filter(
-      (e) => e.cat_category === this.#data[familyId].targetCatCategory
+      (e) => e.cat_category === this.#data[familyId].targetCatCategory,
     );
     if (!egg.length) {
       return {};
@@ -455,10 +455,10 @@ class AllTheZenBot {
       this.#logDebug(
         familyId,
         `unable to ${chalk.bold.red("upgrade")} egg -- name '${chalk.red(
-          this.#getFirstUpgrade(familyId)?.name
+          this.#getFirstUpgrade(familyId)?.name,
         )}' -- price ${chalk.red(
-          formarCurrency(this.#getFirstUpgrade(familyId)?.price)
-        )}`
+          formarCurrency(this.#getFirstUpgrade(familyId)?.price),
+        )}`,
       );
     }
 
@@ -547,7 +547,7 @@ class AllTheZenBot {
     let jsonCookies = {};
     try {
       jsonCookies = JSON.parse(
-        cookies?.user?.substring(0, cookies?.user?.indexOf("&chat_instance"))
+        cookies?.user?.substring(0, cookies?.user?.indexOf("&chat_instance")),
       );
     } catch (error) {
       this.#logError(token, "failed to extract user info: ", error);
@@ -608,7 +608,8 @@ class AllTheZenBot {
   #shouldNotifyGameInfo(familyId) {
     const now = new Date();
     const diffSec =
-      (now.getTime() - (this.#getUser(familyId).lastNofifyGameInfo?.getTime() || 0)) /
+      (now.getTime() -
+        (this.#getUser(familyId).lastNofifyGameInfo?.getTime() || 0)) /
       1000;
     const should = !!(diffSec >= this.#maxAgeNotifyGameinfo);
     if (should) {
@@ -619,8 +620,12 @@ class AllTheZenBot {
 
   async #refreshGameInfo(familyId, force = false) {
     const user = this.#getUser(familyId);
+    const now = new Date();
+    const diffSec =
+      (now.getTime() - (user.lastFetchGameInfo?.getTime() || 0)) / 1000;
     if (
       force ||
+      diffSec >= this.#maxAgeRefreshGameInfo ||
       !user ||
       !user.game ||
       Object.keys(user.game).length === 0 ||
@@ -629,7 +634,7 @@ class AllTheZenBot {
     ) {
       const gameInfoResult = await this.#fetchGameInfoAPI(
         this.#getUserToken(familyId),
-        this.#getUserProxy(familyId)
+        this.#getUserProxy(familyId),
       );
       if (gameInfoResult.success) {
         this.#data = {
@@ -648,29 +653,6 @@ class AllTheZenBot {
         this.#setUserAccount(familyId);
       }
       return;
-    }
-
-    const now = new Date();
-    const diffSec =
-      (now.getTime() - (user.lastFetchGameInfo?.getTime() || MAX_NUMBER)) /
-      1000;
-    if (diffSec >= this.#maxAgeRefreshGameInfo) {
-      const gameInfoResult = await this.#fetchGameInfoAPI(
-        this.#getUserToken(familyId),
-        this.#getUserProxy(familyId)
-      );
-      if (gameInfoResult.success) {
-        this.#data[familyId] = {
-          ...this.#data[familyId],
-          targetCatCategory: this.#data[familyId]?.targetCatCategory
-            ? this.#data[familyId].targetCatCategory
-            : gameInfoResult.data?.zen_den?.egg_shop[
-                gameInfoResult.data?.zen_den?.egg_shop?.length - 1
-              ]?.cat_category || "",
-          game: gameInfoResult.data,
-          lastFetchGameInfo: new Date(),
-        };
-      }
     }
   }
 
@@ -721,14 +703,14 @@ class AllTheZenBot {
     const result = await this.#get(
       this.#getGameUrl("/egg/api/den"),
       this.#getHeaderToken(token),
-      proxy
+      proxy,
     );
     if (!result.success) {
       this.#logError(
         token,
         "failed to fetch game info:",
         result.error,
-        getIP(proxy)
+        getIP(proxy),
       );
       await eventBus.dispatchAsync("error.api.fetched_game_info", {
         token,
@@ -743,14 +725,14 @@ class AllTheZenBot {
       this.#getGameUrl("/egg/api/den/gently-stroke-the-regenesis-egg"),
       null,
       this.#getHeaderToken(token),
-      proxy
+      proxy,
     );
     if (!result.success) {
       this.#logError(
         token,
         "failed to buy big egg:",
         result.error,
-        getIP(proxy)
+        getIP(proxy),
       );
       await eventBus.dispatchAsync("error.api.bought_big_egg", {
         token,
@@ -767,7 +749,7 @@ class AllTheZenBot {
         cat_category: catCategory,
       },
       this.#getHeaderToken(token),
-      proxy
+      proxy,
     );
     if (!result.success) {
       this.#logError(
@@ -775,7 +757,7 @@ class AllTheZenBot {
         "failed to buy fancy egg:",
         catCategory,
         result.error,
-        getIP(proxy)
+        getIP(proxy),
       );
       await eventBus.dispatchAsync("error.api.bought_fancy_egg", {
         token,
@@ -799,14 +781,14 @@ class AllTheZenBot {
         }`,
       },
       this.#getHeaderToken(token),
-      proxy
+      proxy,
     );
     if (!result.success) {
       this.#logError(
         token,
         "failed to claim fancy parade kitty:",
         result.error,
-        getIP(proxy)
+        getIP(proxy),
       );
       await eventBus.dispatchAsync("error.api.claimed_fancy_parade_kitty", {
         token,
@@ -823,14 +805,14 @@ class AllTheZenBot {
         taps: this.#tapFancyParadeKitty * 2,
       },
       this.#getHeaderToken(token),
-      proxy
+      proxy,
     );
     if (!result.success) {
       this.#logError(
         token,
         "failed to claim zen mode tao:",
         result.error,
-        getIP(proxy)
+        getIP(proxy),
       );
       await eventBus.dispatchAsync("error.api.claimed_zen_mode_tao", {
         token,
@@ -845,7 +827,7 @@ class AllTheZenBot {
       this.#getGameUrl("/egg/api/den/claim-tao"),
       null,
       this.#getHeaderToken(token),
-      proxy
+      proxy,
     );
     if (!result.success) {
       this.#logError(token, "failed to claim tao:", result.error, getIP(proxy));
@@ -864,14 +846,14 @@ class AllTheZenBot {
         upgrade_id,
       },
       this.#getHeaderToken(token),
-      proxy
+      proxy,
     );
     if (!result.success) {
       this.#logError(
         token,
         "failed to upgrade egg:",
         result.error,
-        getIP(proxy)
+        getIP(proxy),
       );
       await eventBus.dispatchAsync("error.api.upgraded_egg", {
         token,
@@ -888,14 +870,14 @@ class AllTheZenBot {
         ids,
       },
       this.#getHeaderToken(token),
-      proxy
+      proxy,
     );
     if (!result.success) {
       this.#logError(
         token,
         "failed to ack achievements:",
         result.error,
-        getIP(proxy)
+        getIP(proxy),
       );
       await eventBus.dispatchAsync("error.api.ack_achievements", {
         token,
@@ -1002,7 +984,7 @@ class AllTheZenBot {
       `[${familyOrToken}][${this.#getUserAccount(familyOrToken)?.username}][${
         this.#getUserAccount(familyOrToken)?.id
       }][${getIP(this.#getUser(familyOrToken)?.proxy)}]`,
-      ...args
+      ...args,
     );
   }
 }
@@ -1076,7 +1058,7 @@ function routeV1(fastify, _, done) {
       const { familyId } = request.body;
       await bot.allowUpgradeEggClient(familyId);
       return responseSuccess(reply);
-    }
+    },
   );
 
   fastify.put(
@@ -1085,7 +1067,7 @@ function routeV1(fastify, _, done) {
       const { familyId } = request.body;
       await bot.denyUpgradeEggClient(familyId);
       return responseSuccess(reply);
-    }
+    },
   );
 
   fastify.put(
@@ -1094,7 +1076,7 @@ function routeV1(fastify, _, done) {
       const { familyId } = request.body;
       await bot.allowBuyEggClient(familyId);
       return responseSuccess(reply);
-    }
+    },
   );
 
   fastify.put("/clients/eggs/deny-buy", async function handler(request, reply) {
