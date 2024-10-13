@@ -16,7 +16,7 @@ process.once("SIGTERM", () => bot.stop("SIGTERM"));
 
 bot.start((ctx) => {
   ctx.reply(
-    "Welcome to your Telegram bot! Use /help to see available commands."
+    "Welcome to your Telegram bot! Use /help to see available commands.",
   );
 });
 
@@ -29,16 +29,17 @@ bot.command("info", async (ctx) => {
     let msg = `${format.bold("[INFO]")}\n`;
     Object.entries(data).forEach(([key, value]) => {
       msg += `Account: ${format.bold(key)} -- ${format.bold(
-        value?.account?.username
+        value?.account?.username,
       )} -- ${format.bold(value?.account?.first_name)}\n`;
-      msg += `Proxy: ${format.bold(value?.proxy)}\n`;
-      msg += `Token: ${format.bold(value?.token)}\n`;
+      msg += `Parade kitties: ${format.bold(
+        value?.paradeKitties?.map((k) => k.id)?.join(", ") || "NONE",
+      )}\n`;
       msg += `Total Purple: ${format.bold(
-        formatCurrency(value?.totalPurple)
+        formatCurrency(value?.totalPurple),
       )}\n`;
       msg += `ZPS Purple: ${format.bold(formatCurrency(value?.zpsPurple))}\n`;
       msg += `Total Yellow: ${format.bold(
-        formatCurrency(value?.totalYellow)
+        formatCurrency(value?.totalYellow),
       )}\n`;
       msg += `ZPS Yellow: ${format.bold(formatCurrency(value?.zpsYellow))}\n`;
       msg += `Next Pet Timestamp: ${format.bold(value?.nextPetTimestamp)}\n`;
@@ -46,6 +47,8 @@ bot.command("info", async (ctx) => {
       msg += `Allow Buy Egg: ${format.bold(value?.allowBuyEgg)}\n`;
       msg += `Allow Upgrade Egg: ${format.bold(value?.allowUpgradeEgg)}\n`;
       msg += `Last Fetch Game Info: ${format.bold(value?.lastFetchGameInfo)}\n`;
+      msg += `Proxy: ${format.bold(value?.proxy)}\n`;
+      msg += `Token: ${format.bold(value?.token)}\n`;
       msg += `-----------------------------------\n`;
     });
     ctx.reply(msg, { parse_mode: "Markdown" });
@@ -92,7 +95,7 @@ bot.command("updatetargetcatcategory", async (ctx) => {
   const [, familyId, targetCatCategory] = ctx.message.text.split(" ");
   if (!familyId || !targetCatCategory) {
     return ctx.reply(
-      "Invalid command. Usage: /updatetargetcatcategory <familyId> <targetCatCategory>"
+      "Invalid command. Usage: /updatetargetcatcategory <familyId> <targetCatCategory>",
     );
   }
   await nodeFetch(`${BOT_API_URL}/api/v1/clients/eggs/category`, {
@@ -174,6 +177,26 @@ bot.command("denybuyegg", async (ctx) => {
     }),
   });
   ctx.reply("Deny buy egg. Done!");
+});
+
+bot.command("claimparadekitty", async (ctx) => {
+  const [, familyId, id] = ctx.message.text.split(" ");
+  if (!familyId || !id) {
+    return ctx.reply(
+      "Invalid command. Usage: /claimparadekitty <familyId> <id>",
+    );
+  }
+  await nodeFetch(`${BOT_API_URL}/api/v1/clients/claim-parade-kitty`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      familyId,
+      id,
+    }),
+  });
+  ctx.reply("Claim parade kitty. Done!");
 });
 
 bot.launch();

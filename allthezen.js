@@ -88,6 +88,7 @@ class AllTheZenBot {
 
   data() {
     for (const familyId in this.#data) {
+      this.#data[familyId].paradeKitties = this.#getParadeKitties(familyId);
       this.#data[familyId].totalPurple = this.#calculateZenPurple(familyId);
       this.#data[familyId].zpsPurple = this.#getZPSPurle(familyId);
       this.#data[familyId].totalYellow = this.#calculateZenYellow(familyId);
@@ -150,6 +151,23 @@ class AllTheZenBot {
       return;
     }
     this.#data[familyId].allowBuyEgg = false;
+  }
+
+  async claimParadeKitty(familyId, id) {
+    if (!this.#data[familyId]) {
+      return;
+    }
+
+    const kitty = this.#getParadeKitties(familyId)?.[Number(id) - 1];
+    if (!kitty) {
+      return;
+    }
+    await this.#claimFancyParadeKittyAPI(
+      this.#getUserToken(familyId),
+      this.#getUserProxy(familyId),
+      kitty?.id,
+    );
+    await this.#refreshGameInfo(familyId, true);
   }
 
   async checkProxyIP(proxy) {
@@ -1124,6 +1142,15 @@ function routeV1(fastify, _, done) {
     await bot.denyBuyEggClient(familyId);
     return responseSuccess(reply);
   });
+
+  fastify.post(
+    "/clients/claim-parade-kitty",
+    async function handler(request, reply) {
+      const { familyId, id } = request.body;
+      await bot.claimParadeKitty(familyId, id);
+      return responseSuccess(reply);
+    },
+  );
 
   done();
 }
