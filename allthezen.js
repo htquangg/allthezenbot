@@ -153,11 +153,10 @@ class AllTheZenBot {
     this.#data[familyId].allowBuyEgg = false;
   }
 
-  async claimParadeKitty(familyId, id) {
+  async claimParadeKittyClient(familyId, id) {
     if (!this.#data[familyId]) {
       return;
     }
-
     const kitty = this.#getParadeKitties(familyId)?.[Number(id) - 1];
     if (!kitty) {
       return;
@@ -167,6 +166,13 @@ class AllTheZenBot {
       this.#getUserProxy(familyId),
       kitty?.id,
     );
+    await this.#refreshGameInfo(familyId, true);
+  }
+
+  async refreshClient(familyId) {
+    if (!this.#data[familyId]) {
+      return;
+    }
     await this.#refreshGameInfo(familyId, true);
   }
 
@@ -1083,7 +1089,6 @@ function routeV1(fastify, _, done) {
     }
     return responseSuccess(reply);
   });
-
   fastify.get("/debug/info", function handler(_, reply) {
     const data = bot.data();
     if (!Object.keys(data).length) {
@@ -1091,25 +1096,21 @@ function routeV1(fastify, _, done) {
     }
     return responseSuccess(reply, data);
   });
-
   fastify.put("/clients/proxy", async function handler(request, reply) {
     const { familyId, proxy } = request.body;
     await bot.updateProxyClient(familyId, proxy);
     return responseSuccess(reply);
   });
-
   fastify.put("/clients/token", async function handler(request, reply) {
     const { familyId, token } = request.body;
     await bot.updateTokenClient(familyId, token);
     return responseSuccess(reply);
   });
-
   fastify.put("/clients/eggs/category", async function handler(request, reply) {
     const { familyId, catCategory } = request.body;
     await bot.updateTargetCatCategoryClient(familyId, catCategory);
     return responseSuccess(reply);
   });
-
   fastify.put(
     "/clients/eggs/allow-upgrade",
     async function handler(request, reply) {
@@ -1118,7 +1119,6 @@ function routeV1(fastify, _, done) {
       return responseSuccess(reply);
     },
   );
-
   fastify.put(
     "/clients/eggs/deny-upgrade",
     async function handler(request, reply) {
@@ -1127,7 +1127,6 @@ function routeV1(fastify, _, done) {
       return responseSuccess(reply);
     },
   );
-
   fastify.put(
     "/clients/eggs/allow-buy",
     async function handler(request, reply) {
@@ -1136,21 +1135,24 @@ function routeV1(fastify, _, done) {
       return responseSuccess(reply);
     },
   );
-
   fastify.put("/clients/eggs/deny-buy", async function handler(request, reply) {
     const { familyId } = request.body;
     await bot.denyBuyEggClient(familyId);
     return responseSuccess(reply);
   });
-
   fastify.post(
     "/clients/claim-parade-kitty",
     async function handler(request, reply) {
       const { familyId, id } = request.body;
-      await bot.claimParadeKitty(familyId, id);
+      await bot.claimParadeKittyClient(familyId, id);
       return responseSuccess(reply);
     },
   );
+  fastify.get("/clients/:familyId/refresh", async function handler(request, reply) {
+    const { familyId } = request.params;
+    await bot.refreshClient(familyId);
+    return responseSuccess(reply);
+  });
 
   done();
 }

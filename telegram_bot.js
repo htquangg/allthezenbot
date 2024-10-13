@@ -199,4 +199,18 @@ bot.command("claimparadekitty", async (ctx) => {
   ctx.reply("Claim parade kitty. Done!");
 });
 
+bot.command("refresh", async (ctx) => {
+  const [, familyId] = ctx.message.text.split(" ");
+  if (!familyId) {
+    return ctx.reply("Invalid command. Usage: /refresh <familyId>");
+  }
+  await nodeFetch(`${BOT_API_URL}/api/v1/clients/${familyId}/refresh`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+  ctx.reply("Refresh. Done!");
+});
+
 bot.launch();
