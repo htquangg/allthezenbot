@@ -8,6 +8,7 @@ const nodeFetch = require("node-fetch-native");
 const { createProxy } = require("node-fetch-native/proxy");
 const { program } = require("commander");
 const Fastify = require("fastify");
+const cors = require('@fastify/cors');
 
 require("./log");
 require("./notification");
@@ -1157,9 +1158,11 @@ function routeV1(fastify, _, done) {
   done();
 }
 
+fastify.register(cors, { });
 fastify.setNotFoundHandler((_, reply) => {
   return responseFailure(reply);
 });
+
 fastify.register(routeV1, { prefix: "/api/v1" });
 
 try {
