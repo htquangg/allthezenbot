@@ -1177,7 +1177,7 @@ try {
 
 bot
   .withAllowBuyEgg()
-  .withAllowUpgradeEgg()
+  // .withAllowUpgradeEgg()
   .run()
   .catch((err) => {
     console.error(err);
