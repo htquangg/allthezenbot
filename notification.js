@@ -17,7 +17,9 @@ eventBus.on(
   async function handleEventFetchedGameInfoError(payload) {
     const { token, error } = payload;
     await sendNotification({
-      message: `*[ERROR][API][FETCHED_GAME_INFO] @${getUserFromToken(token)?.username || ""}*\n${error?.msg}`,
+      message: `*[ERROR][API][FETCHED_GAME_INFO] @${
+        getUserFromToken(token)?.username || ""
+      }*\n${error?.msg || error}`,
     });
   },
 );

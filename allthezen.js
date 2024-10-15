@@ -1,5 +1,6 @@
 require("dotenv").config();
 
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const chalk = require("chalk");
@@ -8,7 +9,8 @@ const nodeFetch = require("node-fetch-native");
 const { createProxy } = require("node-fetch-native/proxy");
 const { program } = require("commander");
 const Fastify = require("fastify");
-const cors = require('@fastify/cors');
+const cors = require("@fastify/cors");
+const CircuitBreaker = require("opossum");
 
 require("./log");
 require("./notification");
@@ -197,16 +199,31 @@ class AllTheZenBot {
 
     let stop = false;
 
+    for (const familyId in this.#data) {
+      try {
+        await this.checkProxyIP(this.#getUserProxy(familyId));
+      } catch (error) {
+        this.#logError(
+          familyId,
+          "failed to resolve proxy",
+          this.#getUserProxy(familyId),
+          error,
+        );
+        this.#data[familyId].proxy =
+          this.proxies[randomIntFromInterval(0, this.proxies.length - 1)];
+      }
+    }
+
+    const tasks = [
+      this.#wrapBuyBigEgg.bind(this),
+      this.#wrapUpgradeEgg.bind(this),
+      this.#wrapBuyFancyEgg.bind(this),
+      this.#wrapAckAchievements.bind(this),
+    ];
+
     while (!stop) {
       for (const familyId in this.#data) {
         try {
-          let proxyIP = "";
-          try {
-            proxyIP = await this.checkProxyIP(this.#getUserProxy(familyId));
-          } catch (error) {
-            this.#logError(familyId, "failed to resolve proxy", error);
-          }
-
           await this.#refreshGameInfo(familyId);
 
           if (this.#shouldNotifyGameInfo(familyId)) {
@@ -233,7 +250,9 @@ class AllTheZenBot {
               this.#getUserAccount(familyId)?.username,
             )} | ${chalk.green(
               this.#getUserAccount(familyId)?.id,
-            )} | ip: ${chalk.green(proxyIP)} ==========`,
+            )} | ip: ${chalk.green(
+              getIP(this.#getUserProxy(familyId)),
+            )} ==========`,
           );
           this.#logInfo(
             familyId,
@@ -265,13 +284,10 @@ class AllTheZenBot {
             );
           });
 
-          await this.#wrapBuyBigEgg(familyId);
-
-          await this.#wrapUpgradeEgg(familyId);
-
-          await this.#wrapBuyFancyEgg(familyId);
-
-          await this.#wrapAckAchievements(familyId);
+          for (const task of tasks) {
+            await task(familyId);
+            await sleep(randomIntFromInterval(5 * 1e3, 10 * 1e3));
+          }
         } catch (error) {
           this.#logError(familyId, error);
         }
@@ -302,17 +318,17 @@ class AllTheZenBot {
 
     await this.#claimParadeKitties(familyId);
 
-    await sleep(randomIntFromInterval(3 * 1e3, 10 * 1e3));
+    await sleep(randomIntFromInterval(5 * 1e3, 15 * 1e3));
     await this.#buyBigEggAPI(
       this.#getUserToken(familyId),
       this.#getUserProxy(familyId),
     );
-    await sleep(randomIntFromInterval(3 * 1e3, 5 * 1e3));
+    await sleep(randomIntFromInterval(5 * 1e3, 15 * 1e3));
     await this.#claimZenModeTaoAPI(
       this.#getUserToken(familyId),
       this.#getUserProxy(familyId),
     );
-    await sleep(randomIntFromInterval(10 * 1e3, 20 * 1e3));
+    await sleep(randomIntFromInterval(5 * 1e3, 15 * 1e3));
     await this.#claimTaoAPI(
       this.#getUserToken(familyId),
       this.#getUserProxy(familyId),
@@ -368,7 +384,6 @@ class AllTheZenBot {
         ids,
       );
       await this.#refreshGameInfo(familyId, true);
-      await sleep(randomIntFromInterval(3 * 1e3, 5 * 1e3));
     }
   }
 
@@ -724,6 +739,10 @@ class AllTheZenBot {
     return 10000 + Number(id);
   }
 
+  #getFamilyToken(token = "token") {
+    return crypto.createHash("md5").update(token).digest("hex").slice(0, 16);
+  }
+
   #initProxies() {
     this.proxies = fs
       .readFileSync("proxy.txt", "utf8")
@@ -778,7 +797,9 @@ class AllTheZenBot {
       );
       await eventBus.dispatchAsync("error.api.fetched_game_info", {
         token,
-        error: result.error,
+        error: {
+          msg: result.error,
+        },
       });
     }
     return result;
@@ -800,7 +821,9 @@ class AllTheZenBot {
       );
       await eventBus.dispatchAsync("error.api.bought_big_egg", {
         token,
-        error: result.error,
+        error: {
+          msg: result.error,
+        },
       });
     }
     return result;
@@ -825,7 +848,9 @@ class AllTheZenBot {
       );
       await eventBus.dispatchAsync("error.api.bought_fancy_egg", {
         token,
-        error: result.error,
+        error: {
+          msg: result.error,
+        },
       });
     }
     return result;
@@ -849,7 +874,9 @@ class AllTheZenBot {
       );
       await eventBus.dispatchAsync("error.api.claimed_fancy_parade_kitty", {
         token,
-        error: result.error,
+        error: {
+          msg: result.error,
+        },
       });
     }
     return result;
@@ -875,7 +902,6 @@ class AllTheZenBot {
       );
       await eventBus.dispatchAsync("error.api.claimed_zen_mode_tao", {
         token,
-        error: result.error,
       });
     }
     return result;
@@ -892,7 +918,9 @@ class AllTheZenBot {
       this.#logError(token, "failed to claim tao:", result.error, getIP(proxy));
       await eventBus.dispatchAsync("error.api.claimed_tao", {
         token,
-        error: result.error,
+        error: {
+          msg: result.error,
+        },
       });
     }
     return result;
@@ -916,7 +944,9 @@ class AllTheZenBot {
       );
       await eventBus.dispatchAsync("error.api.upgraded_egg", {
         token,
-        error: result.error,
+        error: {
+          msg: result.error,
+        },
       });
     }
     return result;
@@ -940,26 +970,52 @@ class AllTheZenBot {
       );
       await eventBus.dispatchAsync("error.api.ack_achievements", {
         token,
-        error: result.error,
+        error: {
+          msg: result.error,
+        },
       });
     }
     return result;
   }
 
   async #get(url, headers = {}, proxy = null) {
-    return await this.#request(url, "GET", null, headers, proxy);
+    return await this.requestWithCircuitBreaker(
+      url,
+      "GET",
+      null,
+      headers,
+      proxy,
+    );
   }
 
-  async #post(url, data = null, headers = {}, proxy = null) {
-    return await this.#request(url, "POST", data, headers, proxy);
+  async #post(url, payload = null, headers = {}, proxy = null) {
+    return await this.requestWithCircuitBreaker(
+      url,
+      "POST",
+      payload,
+      headers,
+      proxy,
+    );
   }
 
-  async #put(url, data = null, headers = {}, proxy = null) {
-    return await this.#request(url, "PUT", data, headers, proxy);
+  async #put(url, payload = null, headers = {}, proxy = null) {
+    return await this.requestWithCircuitBreaker(
+      url,
+      "PUT",
+      payload,
+      headers,
+      proxy,
+    );
   }
 
-  async #delete(url, data = null, headers = {}, proxy = null) {
-    return await this.#request(url, "DELETE", data, headers, proxy);
+  async #delete(url, payload = null, headers = {}, proxy = null) {
+    return await this.requestWithCircuitBreaker(
+      url,
+      "DELETE",
+      payload,
+      headers,
+      proxy,
+    );
   }
 
   #getGameUrl(path) {
@@ -968,17 +1024,72 @@ class AllTheZenBot {
     return uri.toString();
   }
 
-  async #request(url, method, data = null, headers = {}, proxy = null) {
+  #breakers = new Map();
+
+  async requestWithCircuitBreaker(
+    url,
+    method,
+    payload = null,
+    headers = {},
+    proxy = null,
+  ) {
+    let breaker = this.#breakers.get(
+      this.#getFamilyToken(headers[this.#getKeyTokenHeader()]),
+    );
+    if (!breaker) {
+      const abortController = new AbortController();
+      this.#breakers.set(
+        this.#getFamilyToken(headers[this.#getKeyTokenHeader()]),
+        {
+          abortController,
+          fn: new CircuitBreaker(this.#request, {
+            abortController,
+            timeout: 30000, // If our function takes longer than 30 seconds, trigger a failure
+            errorThresholdPercentage: 50, // When 50% of requests fail, trip the circuit
+            resetTimeout: 90000, // After 60 seconds, try again.
+          }),
+        },
+      );
+      breaker = this.#breakers.get(
+        this.#getFamilyToken(headers[this.#getKeyTokenHeader()]),
+      );
+    }
+
+    try {
+      const data = await breaker.fn.fire(
+        url,
+        method,
+        payload,
+        {
+          ...this.#headers(),
+          ...headers,
+        },
+        this.#ignoreProxy ? null : proxy,
+        breaker.abortController.signal,
+      );
+
+      return { success: true, data };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  async #request(
+    url,
+    method,
+    payload = null,
+    headers = {},
+    proxy = null,
+    abortSignal = null,
+  ) {
     let config = {
       method,
-      headers: {
-        ...this.#headers(),
-        ...headers,
-      },
-      ...(data && { body: JSON.stringify(data) }),
+      headers,
+      ...(payload && { body: JSON.stringify(payload) }),
+      signal: abortSignal,
     };
 
-    if (!this.#ignoreProxy && proxy) {
+    if (proxy) {
       config = {
         ...config,
         ...createProxy({
@@ -987,22 +1098,22 @@ class AllTheZenBot {
       };
     }
 
-    try {
-      const response = await nodeFetch(url, config);
-      const data = await response.json();
-      if (data?.error) {
-        return { success: false, error: data.error };
-      }
-      return { success: true, data };
-    } catch (error) {
-      return { success: false, error: error.message };
+    const response = await nodeFetch(url, config);
+    const data = await response.json();
+    if (data?.error) {
+      throw new Error(data.error);
     }
+    return data;
   }
 
   #getHeaderToken(token) {
     return {
-      "x-id-token": token,
+      [this.#getKeyTokenHeader()]: token,
     };
+  }
+
+  #getKeyTokenHeader() {
+    return "x-id-token";
   }
 
   #headers() {
@@ -1058,13 +1169,11 @@ const fastify = Fastify({
 });
 
 process.on("SIGINT", () => {
-  stop = true;
   fastify?.close();
   cleanupAndExit(0);
 });
 
 process.on("SIGTERM", () => {
-  stop = true;
   fastify?.close();
   cleanupAndExit(0);
 });
@@ -1077,7 +1186,6 @@ process.on("unhandledRejection", async (error, promise) => {
       stack: error?.stack,
     },
   });
-  stop = true;
   // fastify?.close();
   // cleanupAndExit(1);
 });
@@ -1149,16 +1257,19 @@ function routeV1(fastify, _, done) {
       return responseSuccess(reply);
     },
   );
-  fastify.get("/clients/:familyId/refresh", async function handler(request, reply) {
-    const { familyId } = request.params;
-    await bot.refreshClient(familyId);
-    return responseSuccess(reply);
-  });
+  fastify.get(
+    "/clients/:familyId/refresh",
+    async function handler(request, reply) {
+      const { familyId } = request.params;
+      await bot.refreshClient(familyId);
+      return responseSuccess(reply);
+    },
+  );
 
   done();
 }
 
-fastify.register(cors, { });
+fastify.register(cors, {});
 fastify.setNotFoundHandler((_, reply) => {
   return responseFailure(reply);
 });
