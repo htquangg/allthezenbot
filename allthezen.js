@@ -36,6 +36,10 @@ program
     "--ignore-proxy",
     "Specify the proxy status on which server is using for connections.",
   )
+  .option(
+    "--target-cat-category <targetCatCategory>",
+    "Specify the target cat category on which server is using for auto upgrade",
+  )
   .parse(process.argv);
 
 const cmdOpts = program.opts();
@@ -43,6 +47,8 @@ const cmdOpts = program.opts();
 const PORT = cmdOpts.port || processEnv("PORT") || 3000;
 
 const IGNORE_PROXY = cmdOpts.ignoreProxy || false;
+
+const TARGET_CAT_CATEGORY = cmdOpts.targetCatCategory || "";
 
 const MAX_NUMBER = Number.MAX_SAFE_INTEGER;
 
@@ -317,7 +323,6 @@ class AllTheZenBot {
     }
 
     await this.#claimParadeKitties(familyId);
-
     await sleep(randomIntFromInterval(5 * 1e3, 15 * 1e3));
     await this.#buyBigEggAPI(
       this.#getUserToken(familyId),
@@ -328,11 +333,12 @@ class AllTheZenBot {
       this.#getUserToken(familyId),
       this.#getUserProxy(familyId),
     );
-    await sleep(randomIntFromInterval(5 * 1e3, 15 * 1e3));
+    await sleep(randomIntFromInterval(10 * 1e3, 30 * 1e3));
     await this.#claimTaoAPI(
       this.#getUserToken(familyId),
       this.#getUserProxy(familyId),
     );
+    await sleep(randomIntFromInterval(5 * 1e3, 15 * 1e3));
     await this.#refreshGameInfo(familyId, true);
     await eventBus.dispatchAsync("big_egg.already_claimed", {
       username: this.#getUserAccount(familyId)?.username,
@@ -359,6 +365,7 @@ class AllTheZenBot {
         this.#getUserToken(familyId),
         this.#getUserProxy(familyId),
       );
+      await sleep(randomIntFromInterval(5 * 1e3, 15 * 1e3));
       await this.#refreshGameInfo(familyId, true);
     }
   }
@@ -369,22 +376,18 @@ class AllTheZenBot {
       return;
     }
 
-    let stop = false;
-
-    while (!stop) {
-      const achievements = game?.zen_den?.unacked_user_achievements || [];
-      if (!achievements.length) {
-        stop = true;
-        continue;
-      }
-      const ids = [achievements[0].id];
-      await this.#ackAchievementsAPI(
-        this.#getUserToken(familyId),
-        this.#getUserProxy(familyId),
-        ids,
-      );
-      await this.#refreshGameInfo(familyId, true);
+    const achievements = game?.zen_den?.unacked_user_achievements || [];
+    if (!achievements.length) {
+      return;
     }
+    const ids = [achievements[0].id];
+    await this.#ackAchievementsAPI(
+      this.#getUserToken(familyId),
+      this.#getUserProxy(familyId),
+      ids,
+    );
+    await sleep(randomIntFromInterval(5 * 1e3, 15 * 1e3));
+    await this.#refreshGameInfo(familyId, true);
   }
 
   async #wrapUpgradeEgg(familyId) {
@@ -392,24 +395,17 @@ class AllTheZenBot {
       return;
     }
 
-    let stop = false;
-    while (!stop) {
-      if (!this.#canUpgradeEgg(familyId)) {
-        stop = true;
-        continue;
-      }
-      await this.#upgradeEggAPI(
-        this.#getUserToken(familyId),
-        this.#getUserProxy(familyId),
-        this.#getFirstUpgrade(familyId)?.id,
-      );
-      await sleep(randomIntFromInterval(5 * 1e3, 10 * 1e3));
-      await this.#claimTaoAPI(
-        this.#getUserProxy(familyId),
-        this.#getUserToken(familyId),
-      );
-      await this.#refreshGameInfo(familyId, true);
+    if (!this.#canUpgradeEgg(familyId)) {
+      return;
     }
+
+    await this.#upgradeEggAPI(
+      this.#getUserToken(familyId),
+      this.#getUserProxy(familyId),
+      this.#getFirstUpgrade(familyId)?.id,
+    );
+    await sleep(randomIntFromInterval(5 * 1e3, 10 * 1e3));
+    await this.#refreshGameInfo(familyId, true);
   }
 
   #canBuyBigEgg(familyId) {
@@ -488,26 +484,21 @@ class AllTheZenBot {
   async #claimParadeKitties(familyId) {
     await this.#refreshGameInfo(familyId, true);
 
-    let stop = false;
-
-    while (!stop) {
-      const paradeKitties = this.#getParadeKitties(familyId);
-      if (!paradeKitties.length) {
-        stop = true;
-        continue;
-      }
-
-      for (let kitty of paradeKitties) {
-        await this.#claimFancyParadeKittyAPI(
-          this.#getUserToken(familyId),
-          this.#getUserProxy(familyId),
-          kitty?.id,
-        );
-        await sleep(randomIntFromInterval(3 * 1e3, 5 * 1e3));
-      }
-
-      await this.#refreshGameInfo(familyId, true);
+    const paradeKitties = this.#getParadeKitties(familyId);
+    if (!paradeKitties.length) {
+      return;
     }
+
+    for (let kitty of paradeKitties) {
+      await this.#claimFancyParadeKittyAPI(
+        this.#getUserToken(familyId),
+        this.#getUserProxy(familyId),
+        kitty?.id,
+      );
+      await sleep(randomIntFromInterval(3 * 1e3, 5 * 1e3));
+    }
+
+    await this.#refreshGameInfo(familyId, true);
   }
 
   #getParadeKitties(familyId) {
@@ -717,15 +708,29 @@ class AllTheZenBot {
         this.#getUserProxy(familyId),
       );
       if (gameInfoResult.success) {
+        let targetCatCategory = this.#data[familyId]?.targetCatCategory;
+        const isInvalid =
+          !targetCatCategory ||
+          targetCatCategory === "" ||
+          (gameInfoResult.data?.zen_den?.egg_shop?.length &&
+            !gameInfoResult.data?.zen_den?.egg_shop.filter(
+              (c) => c.cat_category === targetCatCategory,
+            )?.length);
+        if (isInvalid) {
+          targetCatCategory =
+            gameInfoResult.data?.zen_den?.egg_shop[
+              gameInfoResult.data?.zen_den?.egg_shop?.length - 1
+            ]?.cat_category || "";
+          console.warn(
+            `invalid 'targetCatCategory': '${this.#data[familyId]?.targetCatCategory}'. Default: '${targetCatCategory}'`,
+          );
+        }
+
         this.#data = {
           ...this.#data,
           [familyId]: {
             ...this.#data[familyId],
-            targetCatCategory: this.#data[familyId]?.targetCatCategory
-              ? this.#data[familyId].targetCatCategory
-              : gameInfoResult.data?.zen_den?.egg_shop[
-                  gameInfoResult.data?.zen_den?.egg_shop?.length - 1
-                ]?.cat_category || "",
+            targetCatCategory,
             game: gameInfoResult.data,
             lastFetchGameInfo: new Date(),
           },
@@ -773,7 +778,7 @@ class AllTheZenBot {
           lastFetchGameInfo: null,
           token,
           proxy,
-          targetCatCategory: "",
+          targetCatCategory: TARGET_CAT_CATEGORY,
           allowUpgradeEgg: this.#allowUpgradeEgg,
           allowBuyEgg: this.#allowBuyEgg,
         },
