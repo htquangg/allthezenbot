@@ -120,6 +120,13 @@ class AllTheZenBot {
       return;
     }
     this.#data[familyId].token = token;
+
+    const writeStream = fs.createWriteStream("data.txt");
+    for (const familyId in this.#data) {
+      const user = this.#data[familyId];
+      writeStream.write(`${user.account?.username}|${user.token}\n`, "utf8");
+    }
+    writeStream.end();
   }
 
   async updateTargetCatCategoryClient(familyId, targetCatCategory) {
