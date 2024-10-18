@@ -729,7 +729,11 @@ class AllTheZenBot {
               gameInfoResult.data?.zen_den?.egg_shop?.length - 1
             ]?.cat_category || "";
           console.warn(
-            `invalid 'targetCatCategory': '${this.#data[familyId]?.targetCatCategory}'. Default: '${targetCatCategory}'`,
+            `invalid targetCatCategory: '${
+              this.#data[familyId]?.targetCatCategory
+            }'. Cat categories: '${gameInfoResult.data?.zen_den?.egg_shop
+              ?.map((e) => e.cat_category)
+              ?.join(", ")}' .Default: '${targetCatCategory}'`,
           );
         }
 
@@ -1133,9 +1137,6 @@ class AllTheZenBot {
       accept: "*/*",
       "accept-language": "en-US,en;q=0.9",
       "content-type": "application/json",
-      "sec-ch-ua": '"Chromium";v="129", "Not=A?Brand";v="8"',
-      "sec-ch-ua-mobile": "?1",
-      "sec-ch-ua-platform": '"Android"',
       "sec-fetch-dest": "empty",
       "sec-fetch-mode": "cors",
       "sec-fetch-site": "same-site",
