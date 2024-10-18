@@ -58,6 +58,7 @@ class AllTheZenBot {
   #maxAgeRefreshGameInfo = 300;
   #maxAgeNotifyGameinfo = 300;
   #urgentClaimBigEggSec = 300;
+  #urgentClaimParadeKittiesSec = 600;
   #ignoreProxy = IGNORE_PROXY;
 
   #allowUpgradeEgg = false;
@@ -325,6 +326,16 @@ class AllTheZenBot {
               ? null
               : this.#getNextPetTimestamp(familyId),
         });
+      }
+      // NOTE: in testing, we found that when you claim the parade kitties 10 minutes before claim big egg,
+      // you are more likely to receive the parade kitties after claim big egg.
+      const shouldClaimParadeKitties =
+        this.#getDiffSecToNextPet(familyId) <= 0
+          ? Math.abs(this.#getDiffSecToNextPet(familyId)) <=
+            this.#urgentClaimParadeKittiesSec
+          : false;
+      if (shouldClaimParadeKitties) {
+        await this.#claimParadeKitties(familyId);
       }
       return;
     }
