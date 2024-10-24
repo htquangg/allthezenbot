@@ -29,6 +29,10 @@ program
   .description(packageJson.description)
   .version(packageJson.version)
   .option(
+    "--allow-listen",
+    "Specify the server status on which server is using for listening.",
+  )
+  .option(
     "-p, --port <port>",
     "Specify the TCP port on which the server is listening for connections.",
   )
@@ -43,6 +47,8 @@ program
   .parse(process.argv);
 
 const cmdOpts = program.opts();
+
+const ALLOW_LISTEN = cmdOpts.allowListen || false;
 
 const PORT = cmdOpts.port || processEnv("PORT") || 3000;
 
@@ -1300,17 +1306,19 @@ fastify.setNotFoundHandler((_, reply) => {
 
 fastify.register(routeV1, { prefix: "/api/v1" });
 
-try {
-  fastify.listen({ port: PORT });
-} catch (error) {
-  console.error(error);
-  eventBus.dispatchAsync("error.server", {
-    error: {
-      msg: error?.message || error,
-      stack: error?.stack,
-    },
-  });
-  cleanupAndExit(1);
+if (ALLOW_LISTEN) {
+  try {
+    fastify.listen({ port: PORT });
+  } catch (error) {
+    console.error(error);
+    eventBus.dispatchAsync("error.server", {
+      error: {
+        msg: error?.message || error,
+        stack: error?.stack,
+      },
+    });
+    cleanupAndExit(1);
+  }
 }
 
 bot
