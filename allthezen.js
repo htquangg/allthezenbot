@@ -131,7 +131,7 @@ class AllTheZenBot {
     const writeStream = fs.createWriteStream("data.txt");
     for (const familyId in this.#data) {
       const user = this.#data[familyId];
-      writeStream.write(`${user.account?.username}|${user.token}\n`, "utf8");
+      writeStream.write(`${user.token}\n`, "utf8");
     }
     writeStream.end();
   }
