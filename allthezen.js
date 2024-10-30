@@ -855,7 +855,7 @@ class AllTheZenBot {
       .split("\n")
       .filter(Boolean);
     for (let idx = 0; idx < data.length; idx++) {
-      const [_, token] = data[idx].split("|");
+      const token = data[idx]
 
       let proxy = this.proxies[idx];
       if (!proxy) {
