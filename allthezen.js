@@ -19,7 +19,7 @@ const {
   sleep,
   formatCurrency,
   cleanupAndExit,
-  randomIntFromInterval,
+  randomIntFromInterval: randomInt,
   processEnv,
 } = require("./utils");
 const { eventBus } = require("./bus");
@@ -230,11 +230,12 @@ class AllTheZenBot {
           error,
         );
         this.#data[familyId].proxy =
-          this.proxies[randomIntFromInterval(0, this.proxies.length - 1)];
+          this.proxies[randomInt(0, this.proxies.length - 1)];
       }
     }
 
     const tasks = [
+      this.#wrapBuySmallEgg.bind(this),
       this.#wrapBuyBigEgg.bind(this),
       this.#wrapUpgradeEgg.bind(this),
       this.#wrapBuyFancyEgg.bind(this),
@@ -306,14 +307,35 @@ class AllTheZenBot {
 
           for (const task of tasks) {
             await task(familyId);
-            await sleep(randomIntFromInterval(5 * 1e3, 10 * 1e3));
+            await sleep(randomInt(1 * 1e3, 3 * 1e3));
           }
         } catch (error) {
           this.#logError(familyId, error);
         }
       }
 
-      await sleep(randomIntFromInterval(5 * 1e3, 15 * 1e3));
+      await sleep(randomInt(3 * 1e3, 5 * 1e3));
+    }
+  }
+
+  async #wrapBuySmallEgg(familyId) {
+    if (!this.#getUser(familyId)?.allowBuyEgg) {
+      return;
+    }
+
+    if (this.#canBuySmallEgg(familyId) && !this.#canBuyFancyEgg(familyId)) {
+      await this.#buyFancyEggAPI(
+        this.#getUserToken(familyId),
+        this.#getUserProxy(familyId),
+        this.#getSmallEgg(familyId)?.cat_category,
+      );
+      await sleep(randomInt(3 * 1e3, 5 * 1e3));
+      await this.#claimTaoAPI(
+        this.#getUserToken(familyId),
+        this.#getUserProxy(familyId),
+      );
+      await sleep(randomInt(3 * 1e3, 5 * 1e3));
+      await this.#refreshGameInfo(familyId, true);
     }
   }
 
@@ -347,22 +369,22 @@ class AllTheZenBot {
     }
 
     await this.#claimParadeKitties(familyId);
-    await sleep(randomIntFromInterval(5 * 1e3, 15 * 1e3));
+    await sleep(randomInt(3 * 1e3, 5 * 1e3));
     await this.#buyBigEggAPI(
       this.#getUserToken(familyId),
       this.#getUserProxy(familyId),
     );
-    await sleep(randomIntFromInterval(5 * 1e3, 15 * 1e3));
+    await sleep(randomInt(3 * 1e3, 5 * 1e3));
     await this.#claimZenModeTaoAPI(
       this.#getUserToken(familyId),
       this.#getUserProxy(familyId),
     );
-    await sleep(randomIntFromInterval(10 * 1e3, 30 * 1e3));
+    await sleep(randomInt(3 * 1e3, 5 * 1e3));
     await this.#claimTaoAPI(
       this.#getUserToken(familyId),
       this.#getUserProxy(familyId),
     );
-    await sleep(randomIntFromInterval(5 * 1e3, 15 * 1e3));
+    await sleep(randomInt(3 * 1e3, 5 * 1e3));
     await this.#refreshGameInfo(familyId, true);
     await eventBus.dispatchAsync("big_egg.already_claimed", {
       username: this.#getUserAccount(familyId)?.username,
@@ -384,12 +406,12 @@ class AllTheZenBot {
         this.#getUserProxy(familyId),
         this.#getTargetEgg(familyId)?.cat_category,
       );
-      await sleep(randomIntFromInterval(10 * 1e3, 30 * 1e3));
+      await sleep(randomInt(3 * 1e3, 5 * 1e3));
       await this.#claimTaoAPI(
         this.#getUserToken(familyId),
         this.#getUserProxy(familyId),
       );
-      await sleep(randomIntFromInterval(5 * 1e3, 15 * 1e3));
+      await sleep(randomInt(3 * 1e3, 5 * 1e3));
       await this.#refreshGameInfo(familyId, true);
     }
   }
@@ -410,7 +432,7 @@ class AllTheZenBot {
       this.#getUserProxy(familyId),
       ids,
     );
-    await sleep(randomIntFromInterval(5 * 1e3, 15 * 1e3));
+    await sleep(randomInt(3 * 1e3, 5 * 1e3));
     await this.#refreshGameInfo(familyId, true);
   }
 
@@ -428,7 +450,7 @@ class AllTheZenBot {
       this.#getUserProxy(familyId),
       this.#getFirstUpgrade(familyId)?.id,
     );
-    await sleep(randomIntFromInterval(5 * 1e3, 10 * 1e3));
+    await sleep(randomInt(3 * 1e3, 5 * 1e3));
     await this.#refreshGameInfo(familyId, true);
   }
 
@@ -456,6 +478,27 @@ class AllTheZenBot {
     return can;
   }
 
+  #canBuySmallEgg(familyId) {
+    const game = this.#getUserGame(familyId);
+    if (!game || !Object.keys(game).length) {
+      return false;
+    }
+    const zenPurple = this.#calculateZenPurple(familyId);
+    const priceEgg = this.#getSmallEggPrice(familyId);
+    const can = !!(zenPurple >= priceEgg);
+    if (!can) {
+      this.#logDebug(
+        familyId,
+        `unable to buy small egg ${chalk.bold.red(
+          this.#getSmallEgg(familyId)?.cat_category,
+        )} -- price ${chalk.bold.red(
+          formatCurrency(this.#getSmallEggPrice(familyId)),
+        )}`,
+      );
+    }
+    return can;
+  }
+
   #canBuyFancyEgg(familyId) {
     const game = this.#getUserGame(familyId);
     if (!game || !Object.keys(game).length) {
@@ -477,6 +520,15 @@ class AllTheZenBot {
     return can;
   }
 
+  #getSmallEggPrice(familyId) {
+    const game = this.#getUserGame(familyId);
+    if (!game || !Object.keys(game).length) {
+      return MAX_NUMBER;
+    }
+    const targetEgg = this.#getSmallEgg(familyId);
+    return targetEgg?.current_price || MAX_NUMBER;
+  }
+
   #getTargetEggPrice(familyId) {
     const game = this.#getUserGame(familyId);
     if (!game || !Object.keys(game).length) {
@@ -484,6 +536,18 @@ class AllTheZenBot {
     }
     const targetEgg = this.#getTargetEgg(familyId);
     return targetEgg?.current_price || MAX_NUMBER;
+  }
+
+  #getSmallEgg(familyId) {
+    const eggShop = this.#getEggs(familyId);
+    const eggShopFilter = eggShop.filter(
+      (curr) =>
+        curr.purchase_count < curr.max_level * curr.hatchable_cats?.length,
+    );
+    const egg = eggShopFilter.reduce((prev, curr) =>
+      prev.current_price < curr.current_price ? prev : curr,
+    );
+    return egg;
   }
 
   #getTargetEgg(familyId) {
@@ -519,7 +583,7 @@ class AllTheZenBot {
         this.#getUserProxy(familyId),
         kitty?.id,
       );
-      await sleep(randomIntFromInterval(3 * 1e3, 5 * 1e3));
+      await sleep(randomInt(3 * 1e3, 5 * 1e3));
     }
 
     await this.#refreshGameInfo(familyId, true);
@@ -795,7 +859,7 @@ class AllTheZenBot {
 
       let proxy = this.proxies[idx];
       if (!proxy) {
-        proxy = this.proxies[randomIntFromInterval(0, this.proxies.length - 1)];
+        proxy = this.proxies[randomInt(0, this.proxies.length - 1)];
       }
 
       this.#data = {
@@ -916,7 +980,7 @@ class AllTheZenBot {
   }
 
   async #claimZenModeTaoAPI(token, proxy) {
-    const taps = randomIntFromInterval(25, 60);
+    const taps = randomInt(25, 60);
 
     const result = await this.#post(
       this.#getGameUrl("/egg/api/den/claim-zen-mode-tao"),
@@ -1078,8 +1142,8 @@ class AllTheZenBot {
           fn: new CircuitBreaker(this.#request, {
             abortController,
             timeout: 30000, // If our function takes longer than 30 seconds, trigger a failure
-            errorThresholdPercentage: 50, // When 50% of requests fail, trip the circuit
-            resetTimeout: 90000, // After 60 seconds, try again.
+            errorThresholdPercentage: 80, // When 50% of requests fail, trip the circuit
+            resetTimeout: 60000, // After 60 seconds, try again.
           }),
         },
       );
