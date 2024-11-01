@@ -1,10 +1,11 @@
 # All The Zen BOT
 
 | ✅  | Feature                               |
-| --- | ------------------------------------ |
+| --- | ------------------------------------- |
 | ✅  | Automates buy/claim fancy eggs        |
 | ✅  | Automates claim big egg               |
 | ✅  | Automates claim purple/red/yellow cat |
+| ✅  | Automates claim pumpskin spice event  |
 | ✅  | Handles multiple accounts             |
 | ✅  | Proxy support                         |
 
