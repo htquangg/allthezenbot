@@ -1,5 +1,6 @@
 node_modules/
 .env
 den.json
+storefront.json
 proxy.txt
 data.txt
